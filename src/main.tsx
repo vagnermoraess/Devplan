@@ -45,22 +45,88 @@ type Demand = {
   progress: number;
   due: string;
   risk: string;
+  type?: string;
+  version?: string;
+  notes?: string;
 };
-type Product = { id: number; name: string; code: string; owner: string; active: boolean };
+type Product = {
+  id: number;
+  name: string;
+  code: string;
+  description: string;
+  team: string;
+  coordinator: string;
+  active: boolean;
+};
 const initialProducts: Product[] = [
-  { id: 1, name: "Commerce", code: "COM", owner: "Marina Costa", active: true },
-  { id: 2, name: "Payments", code: "PAY", owner: "Rafael Lima", active: true },
-  { id: 3, name: "Customer", code: "CUS", owner: "Camila Souza", active: true },
-  { id: 4, name: "Platform", code: "PLT", owner: "Bruno Alves", active: true },
-  { id: 5, name: "Analytics", code: "ANA", owner: "Bianca Melo", active: true },
+  {
+    id: 1,
+    name: "Commerce",
+    code: "COM",
+    description: "Experiência de comércio digital",
+    team: "Squad Commerce",
+    coordinator: "Marina Costa",
+    active: true,
+  },
+  {
+    id: 2,
+    name: "Payments",
+    code: "PAY",
+    description: "Pagamentos e serviços financeiros",
+    team: "Squad Payments",
+    coordinator: "Rafael Lima",
+    active: true,
+  },
+  {
+    id: 3,
+    name: "Customer",
+    code: "CUS",
+    description: "Jornada e relacionamento com clientes",
+    team: "Squad Customer",
+    coordinator: "Camila Souza",
+    active: true,
+  },
+  {
+    id: 4,
+    name: "Platform",
+    code: "PLT",
+    description: "Plataforma e serviços compartilhados",
+    team: "Squad Platform",
+    coordinator: "Bruno Alves",
+    active: true,
+  },
+  {
+    id: 5,
+    name: "Analytics",
+    code: "ANA",
+    description: "Dados e inteligência analítica",
+    team: "Squad Analytics",
+    coordinator: "Bianca Melo",
+    active: true,
+  },
 ];
-const ProductContext=createContext<{products:Product[];setProducts:React.Dispatch<React.SetStateAction<Product[]>>}|null>(null);
-function ProductProvider({children}:{children:React.ReactNode}){const [products,setProducts]=useState(initialProducts);return <ProductContext.Provider value={{products,setProducts}}>{children}</ProductContext.Provider>}
-function useProducts(){const value=useContext(ProductContext);if(!value)throw new Error("ProductProvider ausente");return value}
+const ProductContext = createContext<{
+  products: Product[];
+  setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+} | null>(null);
+function ProductProvider({ children }: { children: React.ReactNode }) {
+  const [products, setProducts] = useState(initialProducts);
+  return (
+    <ProductContext.Provider value={{ products, setProducts }}>
+      {children}
+    </ProductContext.Provider>
+  );
+}
+function useProducts() {
+  const value = useContext(ProductContext);
+  if (!value) throw new Error("ProductProvider ausente");
+  return value;
+}
 type RoadmapEntry = {
   demandId: string;
   quarter: string;
   collaborators: string[];
+  allocations: { staffId: number; hours: number }[];
 };
 const demands: Demand[] = [
   {
@@ -145,13 +211,12 @@ const DemandContext = createContext<{
 function DemandProvider({ children }: { children: React.ReactNode }) {
   const [rows, setRows] = useState<Demand[]>(demands);
   const [roadmap, setRoadmap] = useState<RoadmapEntry[]>(
-    demands
-      .slice(0, 5)
-      .map((d) => ({
-        demandId: d.id,
-        quarter: "Q3 2026",
-        collaborators: [d.owner],
-      })),
+    demands.slice(0, 5).map((d) => ({
+      demandId: d.id,
+      quarter: "Q3 2026",
+      collaborators: [d.owner],
+      allocations: [],
+    })),
   );
   return (
     <DemandContext.Provider value={{ rows, setRows, roadmap, setRoadmap }}>
@@ -568,8 +633,14 @@ const quarterMonths: Record<string, string[]> = {
   Q4: ["OUTUBRO", "NOVEMBRO", "DEZEMBRO"],
 };
 const quarters = [
-  "Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026",
-  "Q1 2027", "Q2 2027", "Q3 2027", "Q4 2027",
+  "Q1 2026",
+  "Q2 2026",
+  "Q3 2026",
+  "Q4 2026",
+  "Q1 2027",
+  "Q2 2027",
+  "Q3 2027",
+  "Q4 2027",
 ];
 
 function Roadmap() {
@@ -583,24 +654,36 @@ function Roadmap() {
     const demand = rows.find((d) => d.id === entry.demandId);
     return entry.quarter === quarter && demand ? [{ demand, entry }] : [];
   });
-  const available = rows.filter((d) => !roadmap.some((r) => r.demandId === d.id));
+  const available = rows.filter(
+    (d) => !roadmap.some((r) => r.demandId === d.id),
+  );
   const months = quarterMonths[quarter.slice(0, 2)];
   const add = (id: string) => {
-    setRoadmap((current) => [...current, { demandId: id, quarter, collaborators: [] }]);
+    setRoadmap((current) => [
+      ...current,
+      { demandId: id, quarter, collaborators: [], allocations: [] },
+    ]);
     setPicker(false);
   };
   const move = (id: string, destination: string) =>
-    setRoadmap((current) => current.map((r) => r.demandId === id ? { ...r, quarter: destination } : r));
+    setRoadmap((current) =>
+      current.map((r) =>
+        r.demandId === id ? { ...r, quarter: destination } : r,
+      ),
+    );
   const remove = (id: string) =>
     setRoadmap((current) => current.filter((r) => r.demandId !== id));
-  const toggleStaff = (name: string) => {
+  const updateAllocation = (person: Staff, hours: number) => {
     if (!staffFor) return;
-    const collaborators = staffFor.collaborators.includes(name)
-      ? staffFor.collaborators.filter((person) => person !== name)
-      : [...staffFor.collaborators, name];
-    const updated = { ...staffFor, collaborators };
+    const allocations = hours > 0
+      ? [...staffFor.allocations.filter((a) => a.staffId !== person.id), { staffId: person.id, hours }]
+      : staffFor.allocations.filter((a) => a.staffId !== person.id);
+    const collaborators = allocations.map((a) => team.find((member) => member.id === a.staffId)?.name).filter(Boolean) as string[];
+    const updated = { ...staffFor, collaborators, allocations };
     setStaffFor(updated);
-    setRoadmap((current) => current.map((r) => r.demandId === updated.demandId ? updated : r));
+    setRoadmap((current) =>
+      current.map((r) => (r.demandId === updated.demandId ? updated : r)),
+    );
   };
   return (
     <>
@@ -616,8 +699,9 @@ function Roadmap() {
       <div className="roadmap-source">
         <I.Link2 />
         <span>
-          <b>Demandas são a fonte única.</b> Não é possível criar itens diretamente
-          no Roadmap; aqui você apenas planeja demandas já cadastradas.
+          <b>Demandas são a fonte única.</b> Não é possível criar itens
+          diretamente no Roadmap; aqui você apenas planeja demandas já
+          cadastradas.
         </span>
         <Badge tone="good">{items.length} neste quarter</Badge>
       </div>
@@ -633,21 +717,40 @@ function Roadmap() {
             </button>
           ))}
         </div>
-        <label className="quarter-select"><I.CalendarRange/><select value={quarter} onChange={(e) => setQuarter(e.target.value)}>{quarters.map((q) => <option key={q}>{q}</option>)}</select></label>
+        <label className="quarter-select">
+          <I.CalendarRange />
+          <select value={quarter} onChange={(e) => setQuarter(e.target.value)}>
+            {quarters.map((q) => (
+              <option key={q}>{q}</option>
+            ))}
+          </select>
+        </label>
       </div>
       {items.length === 0 ? (
         <Card className="roadmap-empty">
           <I.Map />
           <h3>Nenhuma demanda em {quarter}</h3>
-          <p>Planeje uma demanda cadastrada ou mova uma demanda de outro quarter.</p>
+          <p>
+            Planeje uma demanda cadastrada ou mova uma demanda de outro quarter.
+          </p>
           <button className="primary" onClick={() => setPicker(true)}>
             <I.ListPlus /> Selecionar demanda
           </button>
         </Card>
       ) : view === "Timeline" ? (
-        <Timeline items={items} months={months} onMove={move} onStaff={setStaffFor} />
+        <Timeline
+          items={items}
+          months={months}
+          onMove={move}
+          onStaff={setStaffFor}
+        />
       ) : (
-        <RoadmapList items={items} onMove={move} onStaff={setStaffFor} onRemove={remove} />
+        <RoadmapList
+          items={items}
+          onMove={move}
+          onStaff={setStaffFor}
+          onRemove={remove}
+        />
       )}
       {picker && (
         <div
@@ -665,7 +768,9 @@ function Roadmap() {
                 </span>
                 <div>
                   <h2>Planejar demanda em {quarter}</h2>
-                  <p>Somente demandas previamente cadastradas estão disponíveis.</p>
+                  <p>
+                    Somente demandas previamente cadastradas estão disponíveis.
+                  </p>
                 </div>
               </div>
               <button className="modal-close" onClick={() => setPicker(false)}>
@@ -707,7 +812,58 @@ function Roadmap() {
           </div>
         </div>
       )}
-      {staffFor && <div className="overlay confirm-overlay" onMouseDown={() => setStaffFor(null)}><div className="staff-roadmap-modal" onMouseDown={(e) => e.stopPropagation()}><div className="modal-head"><div><span className="modal-icon"><I.UsersRound/></span><div><h2>Colaboradores da demanda</h2><p>{rows.find((d) => d.id === staffFor.demandId)?.name}</p></div></div><button className="modal-close" onClick={() => setStaffFor(null)}><I.X/></button></div><div className="staff-check-list">{team.map((person) => <label key={person.id}><input type="checkbox" checked={staffFor.collaborators.includes(person.name)} onChange={() => toggleStaff(person.name)}/><span className="avatar">{person.name.split(" ").map((x) => x[0]).slice(0, 2).join("")}</span><div><b>{person.name}</b><small>{person.role} · {person.total - person.used}h disponíveis</small></div></label>)}</div><div className="picker-foot"><button className="primary" onClick={() => setStaffFor(null)}><I.Check/> Concluir</button></div></div></div>}
+      {staffFor && (
+        <div
+          className="overlay confirm-overlay"
+          onMouseDown={() => setStaffFor(null)}
+        >
+          <div
+            className="staff-roadmap-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <span className="modal-icon">
+                  <I.UsersRound />
+                </span>
+                <div>
+                  <h2>Colaboradores da demanda</h2>
+                  <p>{rows.find((d) => d.id === staffFor.demandId)?.name}</p>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setStaffFor(null)}>
+                <I.X />
+              </button>
+            </div>
+            <div className="staff-check-list">
+              {team.filter((person) => person.product === rows.find((d) => d.id === staffFor.demandId)?.product).map((person) => (
+                <label key={person.id}>
+                  <span className="avatar">
+                    {person.name
+                      .split(" ")
+                      .map((x) => x[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </span>
+                  <div>
+                    <b>{person.name}</b>
+                    <small>
+                      {person.role} · {person.total - person.used}h disponíveis
+                    </small>
+                  </div>
+                  <div className="allocation-hours"><input type="number" min="0" max={person.total-person.used} value={staffFor.allocations.find((a) => a.staffId === person.id)?.hours || 0} onChange={(e) => updateAllocation(person, Number(e.target.value))}/><span>horas</span></div>
+                </label>
+              ))}
+            </div>
+            <div className="allocation-total"><span>Total alocado</span><b>{staffFor.allocations.reduce((sum,a)=>sum+a.hours,0)}h / {rows.find((d)=>d.id===staffFor.demandId)?.effort || 0}h</b></div>
+            <div className="picker-foot">
+              <button className="primary" onClick={() => setStaffFor(null)}>
+                <I.Check /> Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -727,13 +883,18 @@ function Timeline({
       <div className="timeline">
         <div className="tlhead">
           <b>Demanda</b>
-          {months.map((month) => <span key={month}>{month}</span>)}
+          {months.map((month) => (
+            <span key={month}>{month}</span>
+          ))}
         </div>
         {items.map(({ demand: d, entry }, i) => (
           <div className="tlrow" key={d.id}>
             <div>
               <b>{d.name}</b>
-              <small>{d.id} · {entry.collaborators.length || 0} colaborador(es) · {d.effort}h</small>
+              <small>
+                {d.id} · {entry.collaborators.length || 0} colaborador(es) ·{" "}
+                {d.effort}h
+              </small>
             </div>
             <div className="track">
               <span
@@ -746,7 +907,23 @@ function Timeline({
                 <em>{d.progress}%</em>
               </span>
               <i style={{ left: "66%" }} />
-              <div className="timeline-actions"><button title="Definir colaboradores" onClick={() => onStaff(entry)}><I.Users/></button><select title="Mover para outro quarter" value={entry.quarter} onChange={(e) => onMove(d.id, e.target.value)}>{quarters.map((q) => <option key={q}>{q}</option>)}</select></div>
+              <div className="timeline-actions">
+                <button
+                  title="Definir colaboradores"
+                  onClick={() => onStaff(entry)}
+                >
+                  <I.Users />
+                </button>
+                <select
+                  title="Mover para outro quarter"
+                  value={entry.quarter}
+                  onChange={(e) => onMove(d.id, e.target.value)}
+                >
+                  {quarters.map((q) => (
+                    <option key={q}>{q}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         ))}
@@ -790,14 +967,29 @@ function RoadmapList({
                 </td>
                 <td>{d.product}</td>
                 <td>
-                  <button className="staff-link" onClick={() => onStaff(entry)}><I.Users/>{entry.collaborators.length ? `${entry.collaborators.length} alocados` : "Adicionar"}</button>
+                  <button className="staff-link" onClick={() => onStaff(entry)}>
+                    <I.Users />
+                    {entry.collaborators.length
+                      ? `${entry.collaborators.length} alocados`
+                      : "Adicionar"}
+                  </button>
                 </td>
                 <td>
                   <Badge>{d.status}</Badge>
                 </td>
                 <td>{d.priority}</td>
                 <td>{d.effort}h</td>
-                <td><select className="quarter-inline" value={entry.quarter} onChange={(e) => onMove(d.id, e.target.value)}>{quarters.map((q) => <option key={q}>{q}</option>)}</select></td>
+                <td>
+                  <select
+                    className="quarter-inline"
+                    value={entry.quarter}
+                    onChange={(e) => onMove(d.id, e.target.value)}
+                  >
+                    {quarters.map((q) => (
+                      <option key={q}>{q}</option>
+                    ))}
+                  </select>
+                </td>
                 <td>
                   <button
                     className="unlink-button"
@@ -820,6 +1012,7 @@ const emptyDemandForm = {
   description: "",
   product: "Commerce",
   type: "Evolutiva",
+  version: "",
   origin: "Produto",
   requester: "",
   priority: "Média",
@@ -840,6 +1033,7 @@ function Demands() {
   const [removing, setRemoving] = useState<Demand | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState(emptyDemandForm);
+  const selectedProduct = products.find((product) => product.name === form.product);
   const filtered = rows.filter((d) =>
     (d.name + d.id + d.product).toLowerCase().includes(q.toLowerCase()),
   );
@@ -881,6 +1075,9 @@ function Demands() {
       name: d.name,
       product: d.product,
       priority: d.priority,
+      type: d.type || "Evolutiva",
+      version: d.version || "",
+      description: d.notes || "",
       effort: String(d.effort),
       owner: d.owner,
       requester: d.owner,
@@ -897,7 +1094,6 @@ function Demands() {
     if (!form.name.trim()) next.name = "Informe o título da demanda.";
     if (!form.product) next.product = "Selecione um produto cadastrado.";
     if (!form.requester.trim()) next.requester = "Informe o solicitante.";
-    if (!form.owner) next.owner = "Selecione um responsável.";
     if (!form.due) next.due = "Informe o prazo desejado.";
     if (Number(form.effort) <= 0) next.effort = "Informe um esforço válido.";
     setErrors(next);
@@ -910,13 +1106,16 @@ function Demands() {
       id: editing?.id || `DEV-${160 + rows.length}`,
       name: form.name.trim(),
       product: form.product,
-      owner: form.owner,
+      owner: selectedProduct?.coordinator.split(" ")[0] || "Time",
       status: editing?.status || "Backlog",
       priority: form.priority,
       effort: Number(form.effort),
       progress: editing?.progress || 0,
       due,
       risk: form.priority === "Crítica" ? "Alto" : editing?.risk || "Médio",
+      type: form.type,
+      version: form.version,
+      notes: form.description,
     };
     setRows(
       editing
@@ -1041,12 +1240,26 @@ function Demands() {
                 <label>
                   Produto <em>*</em>
                 </label>
-                <select name="product" value={form.product} onChange={change} className={errors.product ? "invalid" : ""}>
+                <select
+                  name="product"
+                  value={form.product}
+                  onChange={change}
+                  className={errors.product ? "invalid" : ""}
+                >
                   <option value="">Selecione um produto...</option>
-                  {products.filter((product) => product.active).map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
+                  {products
+                    .filter((product) => product.active)
+                    .map((product) => (
+                      <option key={product.id} value={product.name}>
+                        {product.name}
+                      </option>
+                    ))}
                 </select>
-                {errors.product && <small className="field-error">{errors.product}</small>}
+                {errors.product && (
+                  <small className="field-error">{errors.product}</small>
+                )}
               </div>
+              <div className="form-field team-readonly"><label>Time responsável <I.Lock/></label><div><I.UsersRound/><span><b>{selectedProduct?.team || "Selecione um produto"}</b><small>{selectedProduct ? `Coordenador: ${selectedProduct.coordinator}` : "Preenchido automaticamente"}</small></span></div></div>
               <div className="form-field">
                 <label>
                   Tipo <em>*</em>
@@ -1072,6 +1285,7 @@ function Demands() {
                   <option>Operações</option>
                 </select>
               </div>
+              <div className="form-field"><label>Versão</label><input name="version" value={form.version} onChange={change} placeholder="Ex.: 5.2"/></div>
               <div className="form-field">
                 <label htmlFor="requester">
                   Solicitante <em>*</em>
@@ -1126,27 +1340,6 @@ function Demands() {
                 />
                 {errors.effort && (
                   <small className="field-error">{errors.effort}</small>
-                )}
-              </div>
-              <div className="form-field">
-                <label>
-                  Responsável <em>*</em>
-                </label>
-                <select
-                  name="owner"
-                  value={form.owner}
-                  onChange={change}
-                  className={errors.owner ? "invalid" : ""}
-                >
-                  <option value="">Selecione...</option>
-                  {members.map(([name]) => (
-                    <option key={name as string}>
-                      {String(name).split(" ")[0]}
-                    </option>
-                  ))}
-                </select>
-                {errors.owner && (
-                  <small className="field-error">{errors.owner}</small>
                 )}
               </div>
               <div className="form-field wide">
@@ -1348,21 +1541,247 @@ function DemandTableRows({
   );
 }
 
-const emptyProduct={name:"",code:"",owner:"",active:true};
-function Products(){
-  const {products,setProducts}=useProducts();
-  const {rows}=useDemands();
-  const {team}=useTeam();
-  const [modal,setModal]=useState(false);
-  const [editing,setEditing]=useState<Product|null>(null);
-  const [form,setForm]=useState(emptyProduct);
-  const [error,setError]=useState("");
-  const openNew=()=>{setEditing(null);setForm(emptyProduct);setError("");setModal(true)};
-  const openEdit=(product:Product)=>{setEditing(product);setForm({name:product.name,code:product.code,owner:product.owner,active:product.active});setError("");setModal(true)};
-  const close=()=>{setModal(false);setEditing(null);setError("")};
-  const submit=(e:React.FormEvent)=>{e.preventDefault();if(!form.name.trim()||!form.code.trim()){setError("Nome e código são obrigatórios.");return}if(products.some((p)=>p.id!==editing?.id&&(p.name.toLowerCase()===form.name.trim().toLowerCase()||p.code.toLowerCase()===form.code.trim().toLowerCase()))){setError("Já existe um produto com esse nome ou código.");return}const data:Product={id:editing?.id||Date.now(),name:form.name.trim(),code:form.code.trim().toUpperCase(),owner:form.owner.trim(),active:form.active};setProducts(editing?products.map((p)=>p.id===editing.id?data:p):[...products,data]);close()};
-  const remove=(product:Product)=>{const usage=rows.filter((d)=>d.product===product.name).length+team.filter((m)=>m.product===product.name).length;if(usage){setError(`O produto ${product.name} não pode ser excluído porque possui ${usage} vínculo(s).`);return}setProducts(products.filter((p)=>p.id!==product.id))};
-  return <><PageHead title="Produtos" desc="Cadastre os produtos utilizados por demandas e colaboradores." action={<button className="primary" onClick={openNew}><I.Plus/> Novo produto</button>}/><div className="product-summary"><I.Database/><span><b>Cadastro mestre</b> Demandas e colaboradores só podem utilizar produtos ativos desta lista.</span><Badge tone="good">{products.filter((p)=>p.active).length} ativos</Badge></div><div className="product-grid">{products.map((product)=>{const demandsCount=rows.filter((d)=>d.product===product.name).length;const staffCount=team.filter((m)=>m.product===product.name).length;return <Card className="product-card" key={product.id}><div className="product-code">{product.code}</div><div className="product-info"><div><h3>{product.name}</h3><Badge tone={product.active?'good':'gray'}>{product.active?'Ativo':'Inativo'}</Badge></div><p><I.UserRound/> {product.owner||"Sem responsável"}</p><div><span><b>{demandsCount}</b> demandas</span><span><b>{staffCount}</b> colaboradores</span></div></div><div className="row-actions"><button title="Editar produto" onClick={()=>openEdit(product)}><I.Pencil/></button><button className="delete" title="Excluir produto" onClick={()=>remove(product)}><I.Trash2/></button></div></Card>})}</div>{error&&!modal&&<div className="toast-success product-error"><I.CircleAlert/><div><b>Produto em uso</b><span>{error}</span></div><button onClick={()=>setError("")}><I.X/></button></div>}{modal&&<div className="overlay confirm-overlay" onMouseDown={close}><form className="staff-modal" onMouseDown={(e)=>e.stopPropagation()} onSubmit={submit}><div className="modal-head"><div><span className="modal-icon"><I.Boxes/></span><div><h2>{editing?'Editar produto':'Novo produto'}</h2><p>Este produto ficará disponível nos demais cadastros.</p></div></div><button type="button" className="modal-close" onClick={close}><I.X/></button></div><div className="staff-form"><div className="form-field"><label>Nome <em>*</em></label><input autoFocus value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Ex.: Marketplace"/></div><div className="form-field"><label>Código <em>*</em></label><input value={form.code} maxLength={6} onChange={(e)=>setForm({...form,code:e.target.value})} placeholder="Ex.: MKT"/></div><div className="form-field wide"><label>Responsável pelo produto</label><input value={form.owner} onChange={(e)=>setForm({...form,owner:e.target.value})} placeholder="Nome do responsável"/></div><label className="product-active"><input type="checkbox" checked={form.active} onChange={(e)=>setForm({...form,active:e.target.checked})}/><span><b>Produto ativo</b><small>Disponível para novas demandas e colaboradores</small></span></label>{error&&<div className="staff-error"><I.CircleAlert/>{error}</div>}</div><div className="modal-actions"><button type="button" className="ghost" onClick={close}>Cancelar</button><button className="primary" type="submit"><I.Save/> Salvar produto</button></div></form></div>}</>;
+const emptyProduct = { name: "", code: "", description: "", team: "", coordinator: "", active: true };
+function Products() {
+  const { products, setProducts } = useProducts();
+  const { rows } = useDemands();
+  const { team } = useTeam();
+  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [form, setForm] = useState(emptyProduct);
+  const [error, setError] = useState("");
+  const openNew = () => {
+    setEditing(null);
+    setForm(emptyProduct);
+    setError("");
+    setModal(true);
+  };
+  const openEdit = (product: Product) => {
+    setEditing(product);
+    setForm({
+      name: product.name,
+      code: product.code,
+      description: product.description,
+      team: product.team,
+      coordinator: product.coordinator,
+      active: product.active,
+    });
+    setError("");
+    setModal(true);
+  };
+  const close = () => {
+    setModal(false);
+    setEditing(null);
+    setError("");
+  };
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.code.trim() || !form.team.trim() || !form.coordinator.trim()) {
+      setError("Nome, código, time e coordenador são obrigatórios.");
+      return;
+    }
+    if (
+      products.some(
+        (p) =>
+          p.id !== editing?.id &&
+          (p.name.toLowerCase() === form.name.trim().toLowerCase() ||
+            p.code.toLowerCase() === form.code.trim().toLowerCase()),
+      )
+    ) {
+      setError("Já existe um produto com esse nome ou código.");
+      return;
+    }
+    const data: Product = {
+      id: editing?.id || Date.now(),
+      name: form.name.trim(),
+      code: form.code.trim().toUpperCase(),
+      description: form.description.trim(),
+      team: form.team.trim(),
+      coordinator: form.coordinator.trim(),
+      active: form.active,
+    };
+    setProducts(
+      editing
+        ? products.map((p) => (p.id === editing.id ? data : p))
+        : [...products, data],
+    );
+    close();
+  };
+  const remove = (product: Product) => {
+    const usage =
+      rows.filter((d) => d.product === product.name).length +
+      team.filter((m) => m.product === product.name).length;
+    if (usage) {
+      setError(
+        `O produto ${product.name} não pode ser excluído porque possui ${usage} vínculo(s).`,
+      );
+      return;
+    }
+    setProducts(products.filter((p) => p.id !== product.id));
+  };
+  return (
+    <>
+      <PageHead
+        title="Produtos"
+        desc="Cadastre os produtos utilizados por demandas e colaboradores."
+        action={
+          <button className="primary" onClick={openNew}>
+            <I.Plus /> Novo produto
+          </button>
+        }
+      />
+      <div className="product-summary">
+        <I.Database />
+        <span>
+          <b>Cadastro mestre</b> Demandas e colaboradores só podem utilizar
+          produtos ativos desta lista.
+        </span>
+        <Badge tone="good">
+          {products.filter((p) => p.active).length} ativos
+        </Badge>
+      </div>
+      <div className="product-grid">
+        {products.map((product) => {
+          const demandsCount = rows.filter(
+            (d) => d.product === product.name,
+          ).length;
+          const staffCount = team.filter(
+            (m) => m.product === product.name,
+          ).length;
+          return (
+            <Card className="product-card" key={product.id}>
+              <div className="product-code">{product.code}</div>
+              <div className="product-info">
+                <div>
+                  <h3>{product.name}</h3>
+                  <Badge tone={product.active ? "good" : "gray"}>
+                    {product.active ? "Ativo" : "Inativo"}
+                  </Badge>
+                </div>
+                <p>
+                  <I.UsersRound /> {product.team}
+                </p>
+                <p><I.UserRound /> Coordenador: {product.coordinator}</p>
+                <div>
+                  <span>
+                    <b>{demandsCount}</b> demandas
+                  </span>
+                  <span>
+                    <b>{staffCount}</b> colaboradores
+                  </span>
+                </div>
+              </div>
+              <div className="row-actions">
+                <button
+                  title="Editar produto"
+                  onClick={() => openEdit(product)}
+                >
+                  <I.Pencil />
+                </button>
+                <button
+                  className="delete"
+                  title="Excluir produto"
+                  onClick={() => remove(product)}
+                >
+                  <I.Trash2 />
+                </button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+      {error && !modal && (
+        <div className="toast-success product-error">
+          <I.CircleAlert />
+          <div>
+            <b>Produto em uso</b>
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError("")}>
+            <I.X />
+          </button>
+        </div>
+      )}
+      {modal && (
+        <div className="overlay confirm-overlay" onMouseDown={close}>
+          <form
+            className="staff-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+            onSubmit={submit}
+          >
+            <div className="modal-head">
+              <div>
+                <span className="modal-icon">
+                  <I.Boxes />
+                </span>
+                <div>
+                  <h2>{editing ? "Editar produto" : "Novo produto"}</h2>
+                  <p>Este produto ficará disponível nos demais cadastros.</p>
+                </div>
+              </div>
+              <button type="button" className="modal-close" onClick={close}>
+                <I.X />
+              </button>
+            </div>
+            <div className="staff-form">
+              <div className="form-field">
+                <label>
+                  Nome <em>*</em>
+                </label>
+                <input
+                  autoFocus
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Ex.: Marketplace"
+                />
+              </div>
+              <div className="form-field">
+                <label>
+                  Código <em>*</em>
+                </label>
+                <input
+                  value={form.code}
+                  maxLength={6}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                  placeholder="Ex.: MKT"
+                />
+              </div>
+              <div className="form-field wide"><label>Descrição</label><textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Contexto e objetivo do produto"/></div>
+              <div className="form-field"><label>Time responsável <em>*</em></label><input value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })} placeholder="Ex.: Squad Marketplace"/></div>
+              <div className="form-field"><label>Coordenador <em>*</em></label><input value={form.coordinator} onChange={(e) => setForm({ ...form, coordinator: e.target.value })} placeholder="Nome do coordenador"/></div>
+              <label className="product-active">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) =>
+                    setForm({ ...form, active: e.target.checked })
+                  }
+                />
+                <span>
+                  <b>Produto ativo</b>
+                  <small>Disponível para novas demandas e colaboradores</small>
+                </span>
+              </label>
+              {error && (
+                <div className="staff-error">
+                  <I.CircleAlert />
+                  {error}
+                </div>
+              )}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={close}>
+                Cancelar
+              </button>
+              <button className="primary" type="submit">
+                <I.Save /> Salvar produto
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
 }
 
 type Staff = {
@@ -1377,7 +1796,14 @@ const initialStaff: Staff[] = members.map(([name, role, total, used], i) => ({
   id: i + 1,
   name: String(name),
   role: String(role),
-  product: ["Commerce", "Payments", "Customer", "Payments", "Platform", "Analytics"][i],
+  product: [
+    "Commerce",
+    "Payments",
+    "Customer",
+    "Payments",
+    "Platform",
+    "Analytics",
+  ][i],
   total: Number(total),
   used: Number(used),
 }));
@@ -1398,7 +1824,13 @@ function useTeam() {
   if (!value) throw new Error("TeamProvider ausente");
   return value;
 }
-const emptyStaff = { name: "", role: "Backend", product: "", total: "130", used: "0" };
+const emptyStaff = {
+  name: "",
+  role: "Backend",
+  product: "",
+  total: "130",
+  used: "0",
+};
 function Capacity() {
   const { team, setTeam } = useTeam();
   const { products } = useProducts();
@@ -1530,7 +1962,9 @@ function Capacity() {
                 </span>
                 <div>
                   <b>{m.name}</b>
-                  <small>{m.role} · {m.product}</small>
+                  <small>
+                    {m.role} · {m.product}
+                  </small>
                 </div>
                 <div className="usage">
                   <div>
@@ -1626,10 +2060,23 @@ function Capacity() {
                 </select>
               </div>
               <div className="form-field wide">
-                <label>Produto <em>*</em></label>
-                <select value={form.product} onChange={(e) => setForm({ ...form, product: e.target.value })}>
+                <label>
+                  Produto <em>*</em>
+                </label>
+                <select
+                  value={form.product}
+                  onChange={(e) =>
+                    setForm({ ...form, product: e.target.value })
+                  }
+                >
                   <option value="">Selecione um produto...</option>
-                  {products.filter((product) => product.active).map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
+                  {products
+                    .filter((product) => product.active)
+                    .map((product) => (
+                      <option key={product.id} value={product.name}>
+                        {product.name}
+                      </option>
+                    ))}
                 </select>
               </div>
               <div className="form-field">
