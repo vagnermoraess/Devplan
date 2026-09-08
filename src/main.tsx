@@ -143,6 +143,7 @@ const demands: Demand[] = [
     effort: 120,
     progress: 68,
     due: "12 Set",
+    startDate: "2026-07-08", dueDate: "2026-09-12",
     risk: "Alto",
   },
   {
@@ -155,6 +156,7 @@ const demands: Demand[] = [
     effort: 96,
     progress: 82,
     due: "06 Set",
+    startDate: "2026-07-22", dueDate: "2026-09-06",
     risk: "Médio",
   },
   {
@@ -167,6 +169,7 @@ const demands: Demand[] = [
     effort: 140,
     progress: 24,
     due: "24 Set",
+    startDate: "2026-08-03", dueDate: "2026-09-24",
     risk: "Crítico",
   },
   {
@@ -179,6 +182,7 @@ const demands: Demand[] = [
     effort: 60,
     progress: 10,
     due: "18 Set",
+    startDate: "2026-08-24", dueDate: "2026-09-18",
     risk: "Alto",
   },
   {
@@ -191,6 +195,7 @@ const demands: Demand[] = [
     effort: 48,
     progress: 100,
     due: "28 Ago",
+    startDate: "2026-07-15", dueDate: "2026-08-28",
     risk: "Baixo",
   },
   {
@@ -203,6 +208,7 @@ const demands: Demand[] = [
     effort: 72,
     progress: 35,
     due: "30 Set",
+    startDate: "2026-09-01", dueDate: "2026-09-30",
     risk: "Alto",
   },
 ];
@@ -221,7 +227,7 @@ function DemandProvider({ children }: { children: React.ReactNode }) {
       demandId: d.id,
       quarter: "Q3 2026",
       collaborators: [d.owner],
-      allocations: [],
+      allocations: [{ staffId: Math.max(1, members.findIndex(([name]) => String(name).startsWith(d.owner)) + 1), hours: d.effort }],
     })),
   );
   const [history,setHistory]=useState<ChangeLog[]>([]);
@@ -246,8 +252,8 @@ const members = [
 ];
 const nav: [Page, any][] = [
   ["Visão geral", I.LayoutDashboard],
-  ["Roadmap", I.Map],
   ["Demandas", I.ListTodo],
+  ["Roadmap", I.Map],
   ["Produtos", I.Boxes],
   ["Capacidade", I.Users],
   ["Planejamento", I.CalendarRange],
@@ -772,6 +778,7 @@ function Roadmap() {
         <Timeline
           items={items}
           months={months}
+          quarter={quarter}
           onMove={move}
           onStaff={setStaffFor}
         />
@@ -901,14 +908,22 @@ function Roadmap() {
 function Timeline({
   items,
   months,
+  quarter,
   onMove,
   onStaff,
 }: {
   items: { demand: Demand; entry: RoadmapEntry }[];
   months: string[];
+  quarter: string;
   onMove: (id: string, quarter: string) => void;
   onStaff: (entry: RoadmapEntry) => void;
 }) {
+  const [quarterName,yearText]=quarter.split(" ");
+  const quarterIndex=Number(quarterName.slice(1))-1;
+  const quarterStart=new Date(Number(yearText),quarterIndex*3,1).getTime();
+  const quarterEnd=new Date(Number(yearText),quarterIndex*3+3,0,23,59,59).getTime();
+  const span=quarterEnd-quarterStart;
+  const position=(d:Demand)=>{const start=Math.max(quarterStart,new Date(`${d.startDate || `${yearText}-${String(quarterIndex*3+1).padStart(2,"0")}-01`}T12:00:00`).getTime());const end=Math.min(quarterEnd,new Date(`${d.dueDate || d.startDate || `${yearText}-${String(quarterIndex*3+3).padStart(2,"0")}-28`}T12:00:00`).getTime());const left=Math.max(0,Math.min(100,(start-quarterStart)/span*100));const width=Math.max(4,Math.min(100-left,(end-start)/span*100));return {left:`${left}%`,width:`${width}%`}};
   return (
     <Card>
       <div className="timeline">
@@ -930,12 +945,11 @@ function Timeline({
             <div className="track">
               <span
                 className={"bar b" + (i % 5)}
-                style={{
-                  width: `${Math.min(58, 28 + i * 7)}%`,
-                  left: `${Math.min(55, i * 9)}%`,
-                }}
+                style={position(d)}
+                onClick={() => onStaff(entry)}
+                title="Ver colaboradores alocados"
               >
-                <em>{d.progress}%</em>
+                <em>{d.progress}% · {d.startDate ? new Date(d.startDate+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}) : "início não informado"}</em>
               </span>
               <i style={{ left: "66%" }} />
               <div className="timeline-actions">
