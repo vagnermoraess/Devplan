@@ -49,7 +49,10 @@ type Demand = {
   version?: string;
   notes?: string;
   startDate?: string;
+  dueDate?: string;
+  resourceIds?: number[];
 };
+type ChangeLog={id:number;date:string;title:string;actor:string;detail:string;tone:"blue"|"good"|"warn"|"bad"};
 type Product = {
   id: number;
   name: string;
@@ -208,6 +211,8 @@ const DemandContext = createContext<{
   setRows: React.Dispatch<React.SetStateAction<Demand[]>>;
   roadmap: RoadmapEntry[];
   setRoadmap: React.Dispatch<React.SetStateAction<RoadmapEntry[]>>;
+  history: ChangeLog[];
+  setHistory: React.Dispatch<React.SetStateAction<ChangeLog[]>>;
 } | null>(null);
 function DemandProvider({ children }: { children: React.ReactNode }) {
   const [rows, setRows] = useState<Demand[]>(demands);
@@ -219,8 +224,9 @@ function DemandProvider({ children }: { children: React.ReactNode }) {
       allocations: [],
     })),
   );
+  const [history,setHistory]=useState<ChangeLog[]>([]);
   return (
-    <DemandContext.Provider value={{ rows, setRows, roadmap, setRoadmap }}>
+    <DemandContext.Provider value={{ rows, setRows, roadmap, setRoadmap, history, setHistory }}>
       {children}
     </DemandContext.Provider>
   );
@@ -655,7 +661,7 @@ const quarters = [
 ];
 
 function Roadmap() {
-  const { rows, roadmap, setRoadmap } = useDemands();
+  const { rows, roadmap, setRoadmap, setHistory } = useDemands();
   const { team } = useTeam();
   const { products } = useProducts();
   const [view, setView] = useState("Timeline");
@@ -671,21 +677,25 @@ function Roadmap() {
     (d) => !roadmap.some((r) => r.demandId === d.id),
   );
   const months = quarterMonths[quarter.slice(0, 2)];
+  const register=(title:string,detail:string,tone:ChangeLog["tone"]="blue")=>setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}),title,actor:"Vagner Moraes",detail,tone},...current]);
   const add = (id: string) => {
     setRoadmap((current) => [
       ...current,
       { demandId: id, quarter, collaborators: [], allocations: [] },
     ]);
+    register("Demanda adicionada ao roadmap",`${id} planejada em ${quarter}`,"good");
     setPicker(false);
   };
-  const move = (id: string, destination: string) =>
+  const move = (id: string, destination: string) => {
+    const origin=roadmap.find((item)=>item.demandId===id)?.quarter;
     setRoadmap((current) =>
       current.map((r) =>
         r.demandId === id ? { ...r, quarter: destination } : r,
       ),
     );
-  const remove = (id: string) =>
-    setRoadmap((current) => current.filter((r) => r.demandId !== id));
+    register("Demanda movida de quarter",`${id}: ${origin} → ${destination}`,"warn");
+  };
+  const remove = (id: string) => {setRoadmap((current) => current.filter((r) => r.demandId !== id));register("Demanda removida do roadmap",`${id} removida do planejamento`,"bad")};
   const updateAllocation = (person: Staff, hours: number) => {
     if (!staffFor) return;
     const allocations = hours > 0
@@ -697,6 +707,7 @@ function Roadmap() {
     setRoadmap((current) =>
       current.map((r) => (r.demandId === updated.demandId ? updated : r)),
     );
+    register("Alocação do roadmap alterada",`${updated.demandId}: ${allocations.reduce((sum,a)=>sum+a.hours,0)}h distribuídas entre ${collaborators.length} colaborador(es)`);
   };
   return (
     <>
@@ -1043,11 +1054,13 @@ const emptyDemandForm = {
   dependencies: "",
   justification: "",
   impact: "",
+  resourceIds: [] as number[],
 };
 function Demands() {
   const [q, setQ] = useState("");
   const { rows, setRows } = useDemands();
   const { products } = useProducts();
+  const { team } = useTeam();
   const [modal, setModal] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState<Demand | null>(null);
@@ -1055,6 +1068,7 @@ function Demands() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState(emptyDemandForm);
   const selectedProduct = products.find((product) => product.name === form.product);
+  const availableResources = team.filter((person) => person.product === form.product);
   const filtered = rows.filter((d) =>
     (d.name + d.id + d.product).toLowerCase().includes(q.toLowerCase()),
   );
@@ -1062,7 +1076,7 @@ function Demands() {
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >,
-  ) => setForm({ ...form, [e.target.name]: e.target.value });
+  ) => setForm(e.target.name === "product" ? { ...form, product: e.target.value, resourceIds: [] } : { ...form, [e.target.name]: e.target.value });
   const close = () => {
     setModal(false);
     setEditing(null);
@@ -1102,11 +1116,9 @@ function Demands() {
       effort: String(d.effort),
       owner: d.owner,
       requester: d.owner,
-      due:
-        parts.length === 2
-          ? `2026-${month[parts[1]] || "09"}-${parts[0].padStart(2, "0")}`
-          : "",
       startDate: d.startDate || "",
+      due: d.dueDate || (parts.length === 2 ? `2026-${month[parts[1]] || "09"}-${parts[0].padStart(2, "0")}` : ""),
+      resourceIds: d.resourceIds || [],
     });
     setModal(true);
   };
@@ -1134,11 +1146,13 @@ function Demands() {
       effort: Number(form.effort),
       progress: editing?.progress || 0,
       due,
+      dueDate: form.due,
       risk: form.priority === "Crítica" ? "Alto" : editing?.risk || "Médio",
       type: form.type,
       version: form.version,
       notes: form.description,
       startDate: form.startDate,
+      resourceIds: form.resourceIds,
     };
     setRows(
       editing
@@ -1283,6 +1297,7 @@ function Demands() {
                 )}
               </div>
               <div className="form-field team-readonly"><label>Time responsável <I.Lock/></label><div><I.UsersRound/><span><b>{selectedProduct?.team || "Selecione um produto"}</b><small>{selectedProduct ? `Coordenador: ${selectedProduct.coordinator}` : "Preenchido automaticamente"}</small></span></div></div>
+              <div className="form-field wide"><label>Recursos</label><div className="resource-selector">{!form.product?<p>Selecione um produto para visualizar os colaboradores da squad.</p>:availableResources.length===0?<p>Nenhum colaborador cadastrado para {selectedProduct?.team}.</p>:availableResources.map((person)=><label key={person.id} className={form.resourceIds.includes(person.id)?"selected":""}><input type="checkbox" checked={form.resourceIds.includes(person.id)} onChange={()=>setForm({...form,resourceIds:form.resourceIds.includes(person.id)?form.resourceIds.filter((id)=>id!==person.id):[...form.resourceIds,person.id]})}/><span className="avatar">{person.name.split(" ").map((x)=>x[0]).slice(0,2).join("")}</span><span><b>{person.name}</b><small>{person.role} · {person.total-person.used}h disponíveis</small></span></label>)}</div><small className="resource-help">{form.resourceIds.length} recurso(s) selecionado(s)</small></div>
               <div className="form-field">
                 <label>
                   Categoria <em>*</em>
@@ -2360,7 +2375,7 @@ function Risks() {
   );
 }
 
-function Changes() {
+function LegacyChanges() {
   return (
     <>
       <PageHead
@@ -2425,6 +2440,7 @@ function Changes() {
     </>
   );
 }
+function Changes(){const {history}=useDemands();return <><PageHead title="Mudanças do roadmap" desc="Histórico automático de inclusões, movimentações, remoções e alocações."/><Card>{history.length===0?<div className="changes-empty"><I.History/><b>Nenhuma alteração registrada nesta sessão</b><span>As ações realizadas no Roadmap aparecerão automaticamente aqui.</span></div>:history.map((item)=><div className="change" key={item.id}><div className={`changeicon log-${item.tone}`}>{item.tone==="good"?<I.Plus/>:item.tone==="bad"?<I.Trash2/>:item.tone==="warn"?<I.ArrowRightLeft/>:<I.Users/>}</div><div><small>{item.date}</small><b>{item.title}</b><span>por {item.actor}</span></div><Badge tone={item.tone}>{item.detail}</Badge></div>)}</Card></>}
 function Reports() {
   return (
     <>
