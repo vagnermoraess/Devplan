@@ -27,6 +27,7 @@ type Page =
   | "Visão geral"
   | "Roadmap"
   | "Demandas"
+  | "Produtos"
   | "Capacidade"
   | "Planejamento"
   | "Riscos"
@@ -45,6 +46,17 @@ type Demand = {
   due: string;
   risk: string;
 };
+type Product = { id: number; name: string; code: string; owner: string; active: boolean };
+const initialProducts: Product[] = [
+  { id: 1, name: "Commerce", code: "COM", owner: "Marina Costa", active: true },
+  { id: 2, name: "Payments", code: "PAY", owner: "Rafael Lima", active: true },
+  { id: 3, name: "Customer", code: "CUS", owner: "Camila Souza", active: true },
+  { id: 4, name: "Platform", code: "PLT", owner: "Bruno Alves", active: true },
+  { id: 5, name: "Analytics", code: "ANA", owner: "Bianca Melo", active: true },
+];
+const ProductContext=createContext<{products:Product[];setProducts:React.Dispatch<React.SetStateAction<Product[]>>}|null>(null);
+function ProductProvider({children}:{children:React.ReactNode}){const [products,setProducts]=useState(initialProducts);return <ProductContext.Provider value={{products,setProducts}}>{children}</ProductContext.Provider>}
+function useProducts(){const value=useContext(ProductContext);if(!value)throw new Error("ProductProvider ausente");return value}
 type RoadmapEntry = {
   demandId: string;
   quarter: string;
@@ -164,6 +176,7 @@ const nav: [Page, any][] = [
   ["Visão geral", I.LayoutDashboard],
   ["Roadmap", I.Map],
   ["Demandas", I.ListTodo],
+  ["Produtos", I.Boxes],
   ["Capacidade", I.Users],
   ["Planejamento", I.CalendarRange],
   ["Riscos", I.ShieldAlert],
@@ -820,6 +833,7 @@ const emptyDemandForm = {
 function Demands() {
   const [q, setQ] = useState("");
   const { rows, setRows } = useDemands();
+  const { products } = useProducts();
   const [modal, setModal] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState<Demand | null>(null);
@@ -881,6 +895,7 @@ function Demands() {
     e.preventDefault();
     const next: Record<string, string> = {};
     if (!form.name.trim()) next.name = "Informe o título da demanda.";
+    if (!form.product) next.product = "Selecione um produto cadastrado.";
     if (!form.requester.trim()) next.requester = "Informe o solicitante.";
     if (!form.owner) next.owner = "Selecione um responsável.";
     if (!form.due) next.due = "Informe o prazo desejado.";
@@ -1026,13 +1041,11 @@ function Demands() {
                 <label>
                   Produto <em>*</em>
                 </label>
-                <select name="product" value={form.product} onChange={change}>
-                  <option>Commerce</option>
-                  <option>Payments</option>
-                  <option>Customer</option>
-                  <option>Platform</option>
-                  <option>Analytics</option>
+                <select name="product" value={form.product} onChange={change} className={errors.product ? "invalid" : ""}>
+                  <option value="">Selecione um produto...</option>
+                  {products.filter((product) => product.active).map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
                 </select>
+                {errors.product && <small className="field-error">{errors.product}</small>}
               </div>
               <div className="form-field">
                 <label>
@@ -1335,10 +1348,28 @@ function DemandTableRows({
   );
 }
 
+const emptyProduct={name:"",code:"",owner:"",active:true};
+function Products(){
+  const {products,setProducts}=useProducts();
+  const {rows}=useDemands();
+  const {team}=useTeam();
+  const [modal,setModal]=useState(false);
+  const [editing,setEditing]=useState<Product|null>(null);
+  const [form,setForm]=useState(emptyProduct);
+  const [error,setError]=useState("");
+  const openNew=()=>{setEditing(null);setForm(emptyProduct);setError("");setModal(true)};
+  const openEdit=(product:Product)=>{setEditing(product);setForm({name:product.name,code:product.code,owner:product.owner,active:product.active});setError("");setModal(true)};
+  const close=()=>{setModal(false);setEditing(null);setError("")};
+  const submit=(e:React.FormEvent)=>{e.preventDefault();if(!form.name.trim()||!form.code.trim()){setError("Nome e código são obrigatórios.");return}if(products.some((p)=>p.id!==editing?.id&&(p.name.toLowerCase()===form.name.trim().toLowerCase()||p.code.toLowerCase()===form.code.trim().toLowerCase()))){setError("Já existe um produto com esse nome ou código.");return}const data:Product={id:editing?.id||Date.now(),name:form.name.trim(),code:form.code.trim().toUpperCase(),owner:form.owner.trim(),active:form.active};setProducts(editing?products.map((p)=>p.id===editing.id?data:p):[...products,data]);close()};
+  const remove=(product:Product)=>{const usage=rows.filter((d)=>d.product===product.name).length+team.filter((m)=>m.product===product.name).length;if(usage){setError(`O produto ${product.name} não pode ser excluído porque possui ${usage} vínculo(s).`);return}setProducts(products.filter((p)=>p.id!==product.id))};
+  return <><PageHead title="Produtos" desc="Cadastre os produtos utilizados por demandas e colaboradores." action={<button className="primary" onClick={openNew}><I.Plus/> Novo produto</button>}/><div className="product-summary"><I.Database/><span><b>Cadastro mestre</b> Demandas e colaboradores só podem utilizar produtos ativos desta lista.</span><Badge tone="good">{products.filter((p)=>p.active).length} ativos</Badge></div><div className="product-grid">{products.map((product)=>{const demandsCount=rows.filter((d)=>d.product===product.name).length;const staffCount=team.filter((m)=>m.product===product.name).length;return <Card className="product-card" key={product.id}><div className="product-code">{product.code}</div><div className="product-info"><div><h3>{product.name}</h3><Badge tone={product.active?'good':'gray'}>{product.active?'Ativo':'Inativo'}</Badge></div><p><I.UserRound/> {product.owner||"Sem responsável"}</p><div><span><b>{demandsCount}</b> demandas</span><span><b>{staffCount}</b> colaboradores</span></div></div><div className="row-actions"><button title="Editar produto" onClick={()=>openEdit(product)}><I.Pencil/></button><button className="delete" title="Excluir produto" onClick={()=>remove(product)}><I.Trash2/></button></div></Card>})}</div>{error&&!modal&&<div className="toast-success product-error"><I.CircleAlert/><div><b>Produto em uso</b><span>{error}</span></div><button onClick={()=>setError("")}><I.X/></button></div>}{modal&&<div className="overlay confirm-overlay" onMouseDown={close}><form className="staff-modal" onMouseDown={(e)=>e.stopPropagation()} onSubmit={submit}><div className="modal-head"><div><span className="modal-icon"><I.Boxes/></span><div><h2>{editing?'Editar produto':'Novo produto'}</h2><p>Este produto ficará disponível nos demais cadastros.</p></div></div><button type="button" className="modal-close" onClick={close}><I.X/></button></div><div className="staff-form"><div className="form-field"><label>Nome <em>*</em></label><input autoFocus value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Ex.: Marketplace"/></div><div className="form-field"><label>Código <em>*</em></label><input value={form.code} maxLength={6} onChange={(e)=>setForm({...form,code:e.target.value})} placeholder="Ex.: MKT"/></div><div className="form-field wide"><label>Responsável pelo produto</label><input value={form.owner} onChange={(e)=>setForm({...form,owner:e.target.value})} placeholder="Nome do responsável"/></div><label className="product-active"><input type="checkbox" checked={form.active} onChange={(e)=>setForm({...form,active:e.target.checked})}/><span><b>Produto ativo</b><small>Disponível para novas demandas e colaboradores</small></span></label>{error&&<div className="staff-error"><I.CircleAlert/>{error}</div>}</div><div className="modal-actions"><button type="button" className="ghost" onClick={close}>Cancelar</button><button className="primary" type="submit"><I.Save/> Salvar produto</button></div></form></div>}</>;
+}
+
 type Staff = {
   id: number;
   name: string;
   role: string;
+  product: string;
   total: number;
   used: number;
 };
@@ -1346,6 +1377,7 @@ const initialStaff: Staff[] = members.map(([name, role, total, used], i) => ({
   id: i + 1,
   name: String(name),
   role: String(role),
+  product: ["Commerce", "Payments", "Customer", "Payments", "Platform", "Analytics"][i],
   total: Number(total),
   used: Number(used),
 }));
@@ -1366,9 +1398,10 @@ function useTeam() {
   if (!value) throw new Error("TeamProvider ausente");
   return value;
 }
-const emptyStaff = { name: "", role: "Backend", total: "130", used: "0" };
+const emptyStaff = { name: "", role: "Backend", product: "", total: "130", used: "0" };
 function Capacity() {
   const { team, setTeam } = useTeam();
+  const { products } = useProducts();
   const [form, setForm] = useState(emptyStaff);
   const [editing, setEditing] = useState<Staff | null>(null);
   const [removing, setRemoving] = useState<Staff | null>(null);
@@ -1389,6 +1422,7 @@ function Capacity() {
     setForm({
       name: m.name,
       role: m.role,
+      product: m.product,
       total: String(m.total),
       used: String(m.used),
     });
@@ -1408,6 +1442,10 @@ function Capacity() {
       setError("Informe o nome do colaborador.");
       return;
     }
+    if (!form.product) {
+      setError("Selecione o produto do colaborador.");
+      return;
+    }
     if (cap <= 0 || allocation < 0) {
       setError("Informe valores válidos para capacidade e alocação.");
       return;
@@ -1416,6 +1454,7 @@ function Capacity() {
       id: editing?.id || Date.now(),
       name: form.name.trim(),
       role: form.role,
+      product: form.product,
       total: cap,
       used: allocation,
     };
@@ -1491,7 +1530,7 @@ function Capacity() {
                 </span>
                 <div>
                   <b>{m.name}</b>
-                  <small>{m.role}</small>
+                  <small>{m.role} · {m.product}</small>
                 </div>
                 <div className="usage">
                   <div>
@@ -1584,6 +1623,13 @@ function Capacity() {
                   <option>UX Engineer</option>
                   <option>QA Engineer</option>
                   <option>Product Manager</option>
+                </select>
+              </div>
+              <div className="form-field wide">
+                <label>Produto <em>*</em></label>
+                <select value={form.product} onChange={(e) => setForm({ ...form, product: e.target.value })}>
+                  <option value="">Selecione um produto...</option>
+                  {products.filter((product) => product.active).map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
                 </select>
               </div>
               <div className="form-field">
@@ -2086,6 +2132,8 @@ function App() {
             <Roadmap />
           ) : page === "Demandas" ? (
             <Demands />
+          ) : page === "Produtos" ? (
+            <Products />
           ) : page === "Capacidade" ? (
             <Capacity />
           ) : page === "Planejamento" ? (
@@ -2132,9 +2180,11 @@ function App() {
   );
 }
 createRoot(document.getElementById("root")!).render(
-  <TeamProvider>
-    <DemandProvider>
-      <App />
-    </DemandProvider>
-  </TeamProvider>,
+  <ProductProvider>
+    <TeamProvider>
+      <DemandProvider>
+        <App />
+      </DemandProvider>
+    </TeamProvider>
+  </ProductProvider>,
 );
