@@ -1,83 +1,2140 @@
-import React, {createContext, useContext, useEffect, useMemo, useState} from 'react';
-import {createRoot} from 'react-dom/client';
-import * as I from 'lucide-react';
-import {Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
-import './styles.css';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { createRoot } from "react-dom/client";
+import * as I from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import "./styles.css";
 
-type Page='Visão geral'|'Roadmap'|'Demandas'|'Capacidade'|'Planejamento'|'Riscos'|'Mudanças'|'Relatórios'|'Configurações';
-type Demand={id:string;name:string;product:string;owner:string;status:string;priority:string;effort:number;progress:number;due:string;risk:string};
-const demands:Demand[]=[
- {id:'DEV-142',name:'Novo checkout omnichannel',product:'Commerce',owner:'Marina',status:'Desenvolvimento',priority:'Crítica',effort:120,progress:68,due:'12 Set',risk:'Alto'},
- {id:'DEV-148',name:'Motor antifraude v2',product:'Payments',owner:'Rafael',status:'Em testes',priority:'Alta',effort:96,progress:82,due:'06 Set',risk:'Médio'},
- {id:'DEV-151',name:'Portal de autoatendimento',product:'Customer',owner:'Camila',status:'Planejada',priority:'Alta',effort:140,progress:24,due:'24 Set',risk:'Crítico'},
- {id:'DEV-154',name:'Adequação regulatória BACEN',product:'Payments',owner:'Lucas',status:'Em análise',priority:'Crítica',effort:60,progress:10,due:'18 Set',risk:'Alto'},
- {id:'DEV-156',name:'Otimização de busca',product:'Platform',owner:'Bruno',status:'Concluída',priority:'Média',effort:48,progress:100,due:'28 Ago',risk:'Baixo'},
- {id:'DEV-159',name:'Novo painel de clientes',product:'Analytics',owner:'Bianca',status:'Bloqueada',priority:'Média',effort:72,progress:35,due:'30 Set',risk:'Alto'},
+type Page =
+  | "Visão geral"
+  | "Roadmap"
+  | "Demandas"
+  | "Capacidade"
+  | "Planejamento"
+  | "Riscos"
+  | "Mudanças"
+  | "Relatórios"
+  | "Configurações";
+type Demand = {
+  id: string;
+  name: string;
+  product: string;
+  owner: string;
+  status: string;
+  priority: string;
+  effort: number;
+  progress: number;
+  due: string;
+  risk: string;
+};
+type RoadmapEntry = {
+  demandId: string;
+  quarter: string;
+  collaborators: string[];
+};
+const demands: Demand[] = [
+  {
+    id: "DEV-142",
+    name: "Novo checkout omnichannel",
+    product: "Commerce",
+    owner: "Marina",
+    status: "Desenvolvimento",
+    priority: "Crítica",
+    effort: 120,
+    progress: 68,
+    due: "12 Set",
+    risk: "Alto",
+  },
+  {
+    id: "DEV-148",
+    name: "Motor antifraude v2",
+    product: "Payments",
+    owner: "Rafael",
+    status: "Em testes",
+    priority: "Alta",
+    effort: 96,
+    progress: 82,
+    due: "06 Set",
+    risk: "Médio",
+  },
+  {
+    id: "DEV-151",
+    name: "Portal de autoatendimento",
+    product: "Customer",
+    owner: "Camila",
+    status: "Planejada",
+    priority: "Alta",
+    effort: 140,
+    progress: 24,
+    due: "24 Set",
+    risk: "Crítico",
+  },
+  {
+    id: "DEV-154",
+    name: "Adequação regulatória BACEN",
+    product: "Payments",
+    owner: "Lucas",
+    status: "Em análise",
+    priority: "Crítica",
+    effort: 60,
+    progress: 10,
+    due: "18 Set",
+    risk: "Alto",
+  },
+  {
+    id: "DEV-156",
+    name: "Otimização de busca",
+    product: "Platform",
+    owner: "Bruno",
+    status: "Concluída",
+    priority: "Média",
+    effort: 48,
+    progress: 100,
+    due: "28 Ago",
+    risk: "Baixo",
+  },
+  {
+    id: "DEV-159",
+    name: "Novo painel de clientes",
+    product: "Analytics",
+    owner: "Bianca",
+    status: "Bloqueada",
+    priority: "Média",
+    effort: 72,
+    progress: 35,
+    due: "30 Set",
+    risk: "Alto",
+  },
 ];
-const DemandContext=createContext<{rows:Demand[];setRows:React.Dispatch<React.SetStateAction<Demand[]>>}|null>(null);
-function DemandProvider({children}:{children:React.ReactNode}){const [rows,setRows]=useState<Demand[]>(demands);return <DemandContext.Provider value={{rows,setRows}}>{children}</DemandContext.Provider>}
-function useDemands(){const value=useContext(DemandContext);if(!value)throw new Error('DemandProvider ausente');return value}
-const members=[['Marina Costa','Tech Lead',130,118],['Rafael Lima','Backend',130,125],['Camila Souza','Frontend',130,102],['Lucas Rocha','Backend',120,111],['Bruno Alves','Full Stack',130,88],['Bianca Melo','UX Engineer',110,76]];
-const nav:[Page,any][]=[['Visão geral',I.LayoutDashboard],['Roadmap',I.Map],['Demandas',I.ListTodo],['Capacidade',I.Users],['Planejamento',I.CalendarRange],['Riscos',I.ShieldAlert],['Mudanças',I.GitCompareArrows],['Relatórios',I.BarChart3],['Configurações',I.Settings]];
-const cap=[{m:'Jul',roadmap:220,sustentacao:42,novas:18,reserva:28},{m:'Ago',roadmap:248,sustentacao:48,novas:34,reserva:22},{m:'Set',roadmap:252,sustentacao:50,novas:28,reserva:50}];
-const trend=[{w:'S1',plan:22,done:18},{w:'S2',plan:34,done:28},{w:'S3',plan:48,done:42},{w:'S4',plan:62,done:56},{w:'S5',plan:76,done:66},{w:'S6',plan:88,done:78}];
-const C={blue:'#246bfd',cyan:'#38bdf8',green:'#16a36a',amber:'#f59e0b',red:'#ef4444',purple:'#8b5cf6'};
+const DemandContext = createContext<{
+  rows: Demand[];
+  setRows: React.Dispatch<React.SetStateAction<Demand[]>>;
+  roadmap: RoadmapEntry[];
+  setRoadmap: React.Dispatch<React.SetStateAction<RoadmapEntry[]>>;
+} | null>(null);
+function DemandProvider({ children }: { children: React.ReactNode }) {
+  const [rows, setRows] = useState<Demand[]>(demands);
+  const [roadmap, setRoadmap] = useState<RoadmapEntry[]>(
+    demands
+      .slice(0, 5)
+      .map((d) => ({
+        demandId: d.id,
+        quarter: "Q3 2026",
+        collaborators: [d.owner],
+      })),
+  );
+  return (
+    <DemandContext.Provider value={{ rows, setRows, roadmap, setRoadmap }}>
+      {children}
+    </DemandContext.Provider>
+  );
+}
+function useDemands() {
+  const value = useContext(DemandContext);
+  if (!value) throw new Error("DemandProvider ausente");
+  return value;
+}
+const members = [
+  ["Marina Costa", "Tech Lead", 130, 118],
+  ["Rafael Lima", "Backend", 130, 125],
+  ["Camila Souza", "Frontend", 130, 102],
+  ["Lucas Rocha", "Backend", 120, 111],
+  ["Bruno Alves", "Full Stack", 130, 88],
+  ["Bianca Melo", "UX Engineer", 110, 76],
+];
+const nav: [Page, any][] = [
+  ["Visão geral", I.LayoutDashboard],
+  ["Roadmap", I.Map],
+  ["Demandas", I.ListTodo],
+  ["Capacidade", I.Users],
+  ["Planejamento", I.CalendarRange],
+  ["Riscos", I.ShieldAlert],
+  ["Mudanças", I.GitCompareArrows],
+  ["Relatórios", I.BarChart3],
+  ["Configurações", I.Settings],
+];
+const cap = [
+  { m: "Jul", roadmap: 220, sustentacao: 42, novas: 18, reserva: 28 },
+  { m: "Ago", roadmap: 248, sustentacao: 48, novas: 34, reserva: 22 },
+  { m: "Set", roadmap: 252, sustentacao: 50, novas: 28, reserva: 50 },
+];
+const trend = [
+  { w: "S1", plan: 22, done: 18 },
+  { w: "S2", plan: 34, done: 28 },
+  { w: "S3", plan: 48, done: 42 },
+  { w: "S4", plan: 62, done: 56 },
+  { w: "S5", plan: 76, done: 66 },
+  { w: "S6", plan: 88, done: 78 },
+];
+const C = {
+  blue: "#246bfd",
+  cyan: "#38bdf8",
+  green: "#16a36a",
+  amber: "#f59e0b",
+  red: "#ef4444",
+  purple: "#8b5cf6",
+};
 
-function Badge({children,tone='blue'}:{children:React.ReactNode,tone?:string}){return <span className={'badge '+tone}>{children}</span>}
-function Card({children,className=''}:{children:React.ReactNode,className?:string}){return <section className={'card '+className}>{children}</section>}
-function PageHead({title,desc,action}:{title:string,desc:string,action?:React.ReactNode}){return <div className="pagehead"><div><div className="eyebrow">Q3 2026 · PLANEJAMENTO ATIVO</div><h1>{title}</h1><p>{desc}</p></div>{action}</div>}
-function ChartTip({active,payload,label}:any){if(!active||!payload?.length)return null;return <div className="charttip"><b>{label}</b>{payload.map((p:any)=><div key={p.name}><i style={{background:p.color}}/> {p.name}: <b>{p.value}h</b></div>)}</div>}
+function Badge({
+  children,
+  tone = "blue",
+}: {
+  children: React.ReactNode;
+  tone?: string;
+}) {
+  return <span className={"badge " + tone}>{children}</span>;
+}
+function Card({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <section className={"card " + className}>{children}</section>;
+}
+function PageHead({
+  title,
+  desc,
+  action,
+}: {
+  title: string;
+  desc: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="pagehead">
+      <div>
+        <div className="eyebrow">Q3 2026 · PLANEJAMENTO ATIVO</div>
+        <h1>{title}</h1>
+        <p>{desc}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+function ChartTip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="charttip">
+      <b>{label}</b>
+      {payload.map((p: any) => (
+        <div key={p.name}>
+          <i style={{ background: p.color }} /> {p.name}: <b>{p.value}h</b>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-function Dashboard({go}:{go:(p:Page)=>void}){const kpis=[['Capacidade comprometida','82%','+4,2%','warn',I.Gauge],['Roadmap planejado','18','3 concluídas','blue',I.Map],['Previsibilidade','78%','+6,4%','good',I.Crosshair],['Riscos críticos','3','1 novo','bad',I.ShieldAlert]];return <>
- <PageHead title="Visão geral do roadmap" desc="Acompanhe capacidade, progresso e decisões críticas do trimestre." action={<button className="primary" onClick={()=>go('Planejamento')}><I.Sparkles/> Simular mudança</button>}/>
- <div className="insight"><span><I.Sparkles/></span><div><b>Insight do planejamento</b><p>A entrada da DEV-154 eleva a ocupação de setembro para 94% e pode deslocar o Portal de autoatendimento em 5 dias.</p></div><button onClick={()=>go('Mudanças')}>Revisar impacto <I.ArrowRight/></button></div>
- <div className="kpis">{kpis.map(([n,v,d,t,Icon]:any)=><Card key={n} className="kpi"><div className={'kicon '+t}><Icon/></div><div className="klabel">{n}<I.Info/></div><strong>{v}</strong><small className={t}>{t==='bad'?'↑':'↗'} {d} <span>vs. Q2</span></small></Card>)}</div>
- <div className="grid2"><Card><div className="cardhead"><div><h3>Capacidade por categoria</h3><p>Distribuição mensal do trimestre</p></div><button className="icon"><I.MoreHorizontal/></button></div><div className="chart"><ResponsiveContainer><BarChart data={cap} barGap={0}><CartesianGrid vertical={false}/><XAxis dataKey="m"/><YAxis/><Tooltip content={<ChartTip/>}/><Bar dataKey="roadmap" name="Roadmap" stackId="a" fill={C.blue}/><Bar dataKey="sustentacao" name="Sustentação" stackId="a" fill={C.cyan}/><Bar dataKey="novas" name="Novas demandas" stackId="a" fill={C.amber}/><Bar dataKey="reserva" name="Reserva" stackId="a" fill="#dbe5f4" radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></div><div className="legend"><span><i className="b"/>Roadmap 69%</span><span><i className="c"/>Sustentação 13%</span><span><i className="a"/>Novas 8%</span><span><i/>Reserva 10%</span></div></Card>
- <Card><div className="cardhead"><div><h3>Progresso do roadmap</h3><p>Planejado vs. realizado</p></div><Badge tone="good">+6,4%</Badge></div><div className="chart"><ResponsiveContainer><AreaChart data={trend}><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop stopColor={C.blue} stopOpacity=".22"/><stop offset="1" stopColor={C.blue} stopOpacity="0"/></linearGradient></defs><CartesianGrid vertical={false}/><XAxis dataKey="w"/><YAxis/><Tooltip/><Area type="monotone" dataKey="plan" stroke="#a9b5c7" fill="transparent" strokeDasharray="4 4"/><Area type="monotone" dataKey="done" stroke={C.blue} fill="url(#g)" strokeWidth={3}/></AreaChart></ResponsiveContainer></div><div className="progressfoot"><b>14 de 18 demandas no prazo</b><span>78% concluído ou em curso</span></div></Card></div>
- <div className="grid3"><Card className="span2"><div className="cardhead"><div><h3>Demandas que exigem atenção</h3><p>Priorizadas por risco e proximidade do prazo</p></div><button className="ghost" onClick={()=>go('Demandas')}>Ver todas <I.ArrowRight/></button></div><DemandTable compact/></Card><Card><div className="cardhead"><div><h3>Saúde do trimestre</h3><p>Visão consolidada</p></div></div><div className="donut"><ResponsiveContainer><PieChart><Pie data={[{v:78},{v:22}]} dataKey="v" innerRadius={62} outerRadius={78} startAngle={90} endAngle={-270}><Cell fill={C.green}/><Cell fill="#e9eef5"/></Pie></PieChart></ResponsiveContainer><div><strong>78</strong><span>/100</span><small>SAUDÁVEL</small></div></div><div className="health"><p><span><i className="good"/>Prazo</span><b>82%</b></p><p><span><i className="warn"/>Capacidade</span><b>91%</b></p><p><span><i className="bad"/>Risco</span><b>3 críticos</b></p></div></Card></div>
- </>}
+function Dashboard({ go }: { go: (p: Page) => void }) {
+  const kpis = [
+    ["Capacidade comprometida", "82%", "+4,2%", "warn", I.Gauge],
+    ["Roadmap planejado", "18", "3 concluídas", "blue", I.Map],
+    ["Previsibilidade", "78%", "+6,4%", "good", I.Crosshair],
+    ["Riscos críticos", "3", "1 novo", "bad", I.ShieldAlert],
+  ];
+  return (
+    <>
+      <PageHead
+        title="Visão geral do roadmap"
+        desc="Acompanhe capacidade, progresso e decisões críticas do trimestre."
+        action={
+          <button className="primary" onClick={() => go("Planejamento")}>
+            <I.Sparkles /> Simular mudança
+          </button>
+        }
+      />
+      <div className="insight">
+        <span>
+          <I.Sparkles />
+        </span>
+        <div>
+          <b>Insight do planejamento</b>
+          <p>
+            A entrada da DEV-154 eleva a ocupação de setembro para 94% e pode
+            deslocar o Portal de autoatendimento em 5 dias.
+          </p>
+        </div>
+        <button onClick={() => go("Mudanças")}>
+          Revisar impacto <I.ArrowRight />
+        </button>
+      </div>
+      <div className="kpis">
+        {kpis.map(([n, v, d, t, Icon]: any) => (
+          <Card key={n} className="kpi">
+            <div className={"kicon " + t}>
+              <Icon />
+            </div>
+            <div className="klabel">
+              {n}
+              <I.Info />
+            </div>
+            <strong>{v}</strong>
+            <small className={t}>
+              {t === "bad" ? "↑" : "↗"} {d} <span>vs. Q2</span>
+            </small>
+          </Card>
+        ))}
+      </div>
+      <div className="grid2">
+        <Card>
+          <div className="cardhead">
+            <div>
+              <h3>Capacidade por categoria</h3>
+              <p>Distribuição mensal do trimestre</p>
+            </div>
+            <button className="icon">
+              <I.MoreHorizontal />
+            </button>
+          </div>
+          <div className="chart">
+            <ResponsiveContainer>
+              <BarChart data={cap} barGap={0}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="m" />
+                <YAxis />
+                <Tooltip content={<ChartTip />} />
+                <Bar
+                  dataKey="roadmap"
+                  name="Roadmap"
+                  stackId="a"
+                  fill={C.blue}
+                />
+                <Bar
+                  dataKey="sustentacao"
+                  name="Sustentação"
+                  stackId="a"
+                  fill={C.cyan}
+                />
+                <Bar
+                  dataKey="novas"
+                  name="Novas demandas"
+                  stackId="a"
+                  fill={C.amber}
+                />
+                <Bar
+                  dataKey="reserva"
+                  name="Reserva"
+                  stackId="a"
+                  fill="#dbe5f4"
+                  radius={[5, 5, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="legend">
+            <span>
+              <i className="b" />
+              Roadmap 69%
+            </span>
+            <span>
+              <i className="c" />
+              Sustentação 13%
+            </span>
+            <span>
+              <i className="a" />
+              Novas 8%
+            </span>
+            <span>
+              <i />
+              Reserva 10%
+            </span>
+          </div>
+        </Card>
+        <Card>
+          <div className="cardhead">
+            <div>
+              <h3>Progresso do roadmap</h3>
+              <p>Planejado vs. realizado</p>
+            </div>
+            <Badge tone="good">+6,4%</Badge>
+          </div>
+          <div className="chart">
+            <ResponsiveContainer>
+              <AreaChart data={trend}>
+                <defs>
+                  <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+                    <stop stopColor={C.blue} stopOpacity=".22" />
+                    <stop offset="1" stopColor={C.blue} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="w" />
+                <YAxis />
+                <Tooltip />
+                <Area
+                  type="monotone"
+                  dataKey="plan"
+                  stroke="#a9b5c7"
+                  fill="transparent"
+                  strokeDasharray="4 4"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="done"
+                  stroke={C.blue}
+                  fill="url(#g)"
+                  strokeWidth={3}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="progressfoot">
+            <b>14 de 18 demandas no prazo</b>
+            <span>78% concluído ou em curso</span>
+          </div>
+        </Card>
+      </div>
+      <div className="grid3">
+        <Card className="span2">
+          <div className="cardhead">
+            <div>
+              <h3>Demandas que exigem atenção</h3>
+              <p>Priorizadas por risco e proximidade do prazo</p>
+            </div>
+            <button className="ghost" onClick={() => go("Demandas")}>
+              Ver todas <I.ArrowRight />
+            </button>
+          </div>
+          <DemandTable compact />
+        </Card>
+        <Card>
+          <div className="cardhead">
+            <div>
+              <h3>Saúde do trimestre</h3>
+              <p>Visão consolidada</p>
+            </div>
+          </div>
+          <div className="donut">
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={[{ v: 78 }, { v: 22 }]}
+                  dataKey="v"
+                  innerRadius={62}
+                  outerRadius={78}
+                  startAngle={90}
+                  endAngle={-270}
+                >
+                  <Cell fill={C.green} />
+                  <Cell fill="#e9eef5" />
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <div>
+              <strong>78</strong>
+              <span>/100</span>
+              <small>SAUDÁVEL</small>
+            </div>
+          </div>
+          <div className="health">
+            <p>
+              <span>
+                <i className="good" />
+                Prazo
+              </span>
+              <b>82%</b>
+            </p>
+            <p>
+              <span>
+                <i className="warn" />
+                Capacidade
+              </span>
+              <b>91%</b>
+            </p>
+            <p>
+              <span>
+                <i className="bad" />
+                Risco
+              </span>
+              <b>3 críticos</b>
+            </p>
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+}
 
-function DemandTable({compact=false}:{compact?:boolean}){const rows=compact?demands.slice(0,4):demands;return <div className="tablewrap"><table><thead><tr><th>Demanda</th><th>Produto</th><th>Responsável</th><th>Status</th><th>Prioridade</th><th>Esforço</th><th>Prazo</th><th>Risco</th></tr></thead><tbody>{rows.map(d=><tr key={d.id}><td><b>{d.name}</b><small>{d.id}</small></td><td>{d.product}</td><td><span className="person">{d.owner[0]}</span>{d.owner}</td><td><Badge tone={d.status==='Concluída'?'good':d.status==='Bloqueada'?'bad':'blue'}>{d.status}</Badge></td><td><span className={'priority '+d.priority.toLowerCase()}><i/>{d.priority}</span></td><td>{d.effort}h</td><td>{d.due}</td><td><Badge tone={d.risk==='Crítico'?'bad':d.risk==='Alto'?'warn':d.risk==='Baixo'?'good':'gray'}>{d.risk}</Badge></td></tr>)}</tbody></table></div>}
+function DemandTable({ compact = false }: { compact?: boolean }) {
+  const rows = compact ? demands.slice(0, 4) : demands;
+  return (
+    <div className="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Demanda</th>
+            <th>Produto</th>
+            <th>Responsável</th>
+            <th>Status</th>
+            <th>Prioridade</th>
+            <th>Esforço</th>
+            <th>Prazo</th>
+            <th>Risco</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((d) => (
+            <tr key={d.id}>
+              <td>
+                <b>{d.name}</b>
+                <small>{d.id}</small>
+              </td>
+              <td>{d.product}</td>
+              <td>
+                <span className="person">{d.owner[0]}</span>
+                {d.owner}
+              </td>
+              <td>
+                <Badge
+                  tone={
+                    d.status === "Concluída"
+                      ? "good"
+                      : d.status === "Bloqueada"
+                        ? "bad"
+                        : "blue"
+                  }
+                >
+                  {d.status}
+                </Badge>
+              </td>
+              <td>
+                <span className={"priority " + d.priority.toLowerCase()}>
+                  <i />
+                  {d.priority}
+                </span>
+              </td>
+              <td>{d.effort}h</td>
+              <td>{d.due}</td>
+              <td>
+                <Badge
+                  tone={
+                    d.risk === "Crítico"
+                      ? "bad"
+                      : d.risk === "Alto"
+                        ? "warn"
+                        : d.risk === "Baixo"
+                          ? "good"
+                          : "gray"
+                  }
+                >
+                  {d.risk}
+                </Badge>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-function Roadmap(){const {rows}=useDemands();const [view,setView]=useState('Timeline');const [picker,setPicker]=useState(false);const [roadmapIds,setRoadmapIds]=useState<string[]>(()=>demands.slice(0,5).map(d=>d.id));const roadmap=rows.filter(d=>roadmapIds.includes(d.id));const available=rows.filter(d=>!roadmapIds.includes(d.id));const add=(id:string)=>{setRoadmapIds(ids=>[...ids,id]);setPicker(false)};const remove=(id:string)=>setRoadmapIds(ids=>ids.filter(x=>x!==id));return <><PageHead title="Roadmap trimestral" desc="Todo item do roadmap tem origem em uma demanda cadastrada." action={<button className="primary" onClick={()=>setPicker(true)}><I.Plus/> Adicionar demanda</button>}/><div className="roadmap-source"><I.Link2/><span><b>Fonte única de planejamento</b> O roadmap é composto exclusivamente por demandas cadastradas na Gestão de Demandas.</span><Badge tone="good">{roadmap.length} demandas</Badge></div><div className="toolbar"><div className="seg">{['Timeline','Lista'].map(x=><button key={x} className={view===x?'active':''} onClick={()=>setView(x)}>{x}</button>)}</div><button><I.Filter/> Filtros</button><button><I.Calendar/> Jul – Set 2026</button></div>{roadmap.length===0?<Card className="roadmap-empty"><I.Map/><h3>Roadmap vazio</h3><p>Adicione uma demanda cadastrada para iniciar o planejamento.</p><button className="primary" onClick={()=>setPicker(true)}><I.Plus/> Adicionar demanda</button></Card>:view==='Timeline'?<Timeline items={roadmap} onRemove={remove}/>:<RoadmapList items={roadmap} onRemove={remove}/>} {picker&&<div className="overlay roadmap-picker-overlay" onMouseDown={()=>setPicker(false)}><div className="roadmap-picker" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><div><span className="modal-icon"><I.ListPlus/></span><div><h2>Adicionar ao roadmap</h2><p>Selecione uma demanda já cadastrada.</p></div></div><button className="modal-close" onClick={()=>setPicker(false)}><I.X/></button></div><div className="picker-list">{available.length===0?<div className="picker-empty"><I.CircleCheck/><b>Todas as demandas estão no roadmap</b><span>Cadastre uma nova demanda para disponibilizá-la aqui.</span></div>:available.map(d=><button key={d.id} onClick={()=>add(d.id)}><span className="person">{d.owner[0]}</span><div><b>{d.name}</b><small>{d.id} · {d.product} · {d.effort}h</small></div><Badge tone={d.priority==='Crítica'?'bad':'gray'}>{d.priority}</Badge><I.Plus/></button>)}</div><div className="picker-foot"><button className="ghost" onClick={()=>setPicker(false)}>Cancelar</button></div></div></div>}</>}
-function Timeline({items,onRemove}:{items:Demand[],onRemove:(id:string)=>void}){return <Card><div className="timeline"><div className="tlhead"><b>Demanda</b><span>JULHO</span><span>AGOSTO</span><span>SETEMBRO</span></div>{items.map((d,i)=><div className="tlrow" key={d.id}><div><b>{d.name}</b><small>{d.id} · {d.owner} · {d.effort}h</small></div><div className="track"><span className={'bar b'+i%5} style={{width:`${Math.min(58,28+i*7)}%`,left:`${Math.min(55,i*9)}%`}}><em>{d.progress}%</em></span><i style={{left:'66%'}}/><button className="timeline-remove" title="Remover do roadmap" onClick={()=>onRemove(d.id)}><I.X/></button></div></div>)}</div></Card>}
-function RoadmapList({items,onRemove}:{items:Demand[],onRemove:(id:string)=>void}){return <Card><div className="tablewrap"><table><thead><tr><th>Demanda</th><th>Produto</th><th>Responsável</th><th>Status</th><th>Prioridade</th><th>Esforço</th><th>Prazo</th><th>Ação</th></tr></thead><tbody>{items.map(d=><tr key={d.id}><td><b>{d.name}</b><small>{d.id}</small></td><td>{d.product}</td><td><span className="person">{d.owner[0]}</span>{d.owner}</td><td><Badge>{d.status}</Badge></td><td>{d.priority}</td><td>{d.effort}h</td><td>{d.due}</td><td><button className="unlink-button" onClick={()=>onRemove(d.id)}><I.Unlink/> Remover</button></td></tr>)}</tbody></table></div></Card>}
+const quarterMonths: Record<string, string[]> = {
+  Q1: ["JANEIRO", "FEVEREIRO", "MARÇO"],
+  Q2: ["ABRIL", "MAIO", "JUNHO"],
+  Q3: ["JULHO", "AGOSTO", "SETEMBRO"],
+  Q4: ["OUTUBRO", "NOVEMBRO", "DEZEMBRO"],
+};
+const quarters = [
+  "Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026",
+  "Q1 2027", "Q2 2027", "Q3 2027", "Q4 2027",
+];
 
-const emptyDemandForm={name:'',description:'',product:'Commerce',type:'Evolutiva',origin:'Produto',requester:'',priority:'Média',due:'',effort:'40',owner:'',dependencies:'',justification:'',impact:''};
-function Demands(){
- const [q,setQ]=useState('');
- const {rows,setRows}=useDemands();
- const [modal,setModal]=useState(false);
- const [saved,setSaved]=useState(false);
- const [editing,setEditing]=useState<Demand|null>(null);
- const [removing,setRemoving]=useState<Demand|null>(null);
- const [errors,setErrors]=useState<Record<string,string>>({});
- const [form,setForm]=useState(emptyDemandForm);
- const filtered=rows.filter(d=>(d.name+d.id+d.product).toLowerCase().includes(q.toLowerCase()));
- const change=(e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>)=>setForm({...form,[e.target.name]:e.target.value});
- const close=()=>{setModal(false);setEditing(null);setErrors({});setForm(emptyDemandForm)};
- const openNew=()=>{setEditing(null);setForm(emptyDemandForm);setModal(true)};
- const openEdit=(d:Demand)=>{const month:Record<string,string>={jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12'};const parts=d.due.toLowerCase().split(' ');setEditing(d);setForm({...emptyDemandForm,name:d.name,product:d.product,priority:d.priority,effort:String(d.effort),owner:d.owner,requester:d.owner,due:parts.length===2?`2026-${month[parts[1]]||'09'}-${parts[0].padStart(2,'0')}`:''});setModal(true)};
- const submit=(e:React.FormEvent)=>{e.preventDefault();const next:Record<string,string>={};if(!form.name.trim())next.name='Informe o título da demanda.';if(!form.requester.trim())next.requester='Informe o solicitante.';if(!form.owner)next.owner='Selecione um responsável.';if(!form.due)next.due='Informe o prazo desejado.';if(Number(form.effort)<=0)next.effort='Informe um esforço válido.';setErrors(next);if(Object.keys(next).length)return;const date=new Date(form.due+'T12:00:00');const due=date.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}).replace('.','');const data:Demand={id:editing?.id||`DEV-${160+rows.length}`,name:form.name.trim(),product:form.product,owner:form.owner,status:editing?.status||'Backlog',priority:form.priority,effort:Number(form.effort),progress:editing?.progress||0,due,risk:form.priority==='Crítica'?'Alto':editing?.risk||'Médio'};setRows(editing?rows.map(row=>row.id===editing.id?data:row):[data,...rows]);close();setSaved(true);setTimeout(()=>setSaved(false),3500)};
- const confirmRemove=()=>{if(!removing)return;setRows(rows.filter(row=>row.id!==removing.id));setRemoving(null)};
- return <><PageHead title="Gestão de demandas" desc="Priorize, acompanhe e entenda o impacto de cada entrega." action={<button className="primary" onClick={openNew}><I.Plus/> Nova demanda</button>}/><div className="toolbar"><label className="search inner"><I.Search/><input placeholder="Buscar demandas..." value={q} onChange={e=>setQ(e.target.value)}/></label><button><I.Filter/> Filtros <Badge>3</Badge></button><button><I.Download/> Exportar</button></div><Card><div className="cardhead"><div><h3>Todas as demandas</h3><p>{filtered.length} resultados · atualizado agora</p></div><div className="seg"><button className="active"><I.List/> Lista</button><button><I.Columns3/> Board</button></div></div><DemandTableRows rows={filtered} onEdit={openEdit} onRemove={setRemoving}/></Card>
- {modal&&<div className="overlay demand-overlay" onMouseDown={close}><form className="demand-modal" onMouseDown={e=>e.stopPropagation()} onSubmit={submit}><div className="modal-head"><div><span className="modal-icon"><I.ListPlus/></span><div><h2>Nova demanda</h2><p>Cadastre a demanda para avaliar seu impacto no planejamento.</p></div></div><button type="button" className="modal-close" onClick={close} aria-label="Fechar"><I.X/></button></div><div className="modal-body"><div className="form-field wide"><label htmlFor="name">Título <em>*</em></label><input id="name" name="name" value={form.name} onChange={change} placeholder="Ex.: Integração com novo gateway" autoFocus className={errors.name?'invalid':''}/>{errors.name&&<small className="field-error">{errors.name}</small>}</div><div className="form-field wide"><label htmlFor="description">Descrição</label><textarea id="description" name="description" value={form.description} onChange={change} placeholder="Descreva o contexto e o resultado esperado" rows={3}/></div><div className="form-field"><label>Produto <em>*</em></label><select name="product" value={form.product} onChange={change}><option>Commerce</option><option>Payments</option><option>Customer</option><option>Platform</option><option>Analytics</option></select></div><div className="form-field"><label>Tipo <em>*</em></label><select name="type" value={form.type} onChange={change}><option>Estratégica</option><option>Evolutiva</option><option>Bug</option><option>Incidente</option><option>Sustentação</option><option>Regulatória</option><option>Técnica</option><option>Emergencial</option></select></div><div className="form-field"><label>Origem</label><select name="origin" value={form.origin} onChange={change}><option>Produto</option><option>Cliente</option><option>Tecnologia</option><option>Regulatório</option><option>Operações</option></select></div><div className="form-field"><label htmlFor="requester">Solicitante <em>*</em></label><input id="requester" name="requester" value={form.requester} onChange={change} placeholder="Nome do solicitante" className={errors.requester?'invalid':''}/>{errors.requester&&<small className="field-error">{errors.requester}</small>}</div><div className="form-field"><label>Prioridade</label><select name="priority" value={form.priority} onChange={change}><option>Baixa</option><option>Média</option><option>Alta</option><option>Crítica</option></select></div><div className="form-field"><label htmlFor="due">Prazo desejado <em>*</em></label><input id="due" type="date" name="due" value={form.due} onChange={change} className={errors.due?'invalid':''}/>{errors.due&&<small className="field-error">{errors.due}</small>}</div><div className="form-field"><label htmlFor="effort">Esforço estimado (horas)</label><input id="effort" type="number" min="1" name="effort" value={form.effort} onChange={change} className={errors.effort?'invalid':''}/>{errors.effort&&<small className="field-error">{errors.effort}</small>}</div><div className="form-field"><label>Responsável <em>*</em></label><select name="owner" value={form.owner} onChange={change} className={errors.owner?'invalid':''}><option value="">Selecione...</option>{members.map(([name])=><option key={name as string}>{String(name).split(' ')[0]}</option>)}</select>{errors.owner&&<small className="field-error">{errors.owner}</small>}</div><div className="form-field wide"><label>Dependências</label><input name="dependencies" value={form.dependencies} onChange={change} placeholder="Outros times, sistemas ou demandas"/></div><div className="form-field"><label>Justificativa</label><textarea name="justification" value={form.justification} onChange={change} rows={2} placeholder="Por que esta demanda é necessária?"/></div><div className="form-field"><label>Impacto esperado</label><textarea name="impact" value={form.impact} onChange={change} rows={2} placeholder="Benefícios e resultados esperados"/></div></div><div className="capacity-preview"><I.Gauge/><div><b>Impacto preliminar na capacidade</b><p>A demanda consumirá {form.effort||0}h. O impacto detalhado será calculado após o cadastro.</p></div></div><div className="modal-actions"><button type="button" className="ghost" onClick={close}>Cancelar</button><button type="submit" className="primary"><I.Plus/> Cadastrar demanda</button></div></form></div>}
- {removing&&<div className="overlay confirm-overlay" onMouseDown={()=>setRemoving(null)}><div className="confirm-modal" onMouseDown={e=>e.stopPropagation()}><span><I.Trash2/></span><h3>Excluir demanda?</h3><p>A demanda <b>{removing.id} — {removing.name}</b> será removida da lista. Esta ação não poderá ser desfeita.</p><div><button className="ghost" onClick={()=>setRemoving(null)}>Cancelar</button><button className="danger" onClick={confirmRemove}><I.Trash2/> Excluir demanda</button></div></div></div>}
- {saved&&<div className="toast-success"><I.CircleCheck/><div><b>Demanda salva</b><span>As informações foram atualizadas com sucesso.</span></div><button onClick={()=>setSaved(false)}><I.X/></button></div>}</>}
-function DemandTableRows({rows,onEdit,onRemove}:{rows:Demand[],onEdit?:(d:Demand)=>void,onRemove?:(d:Demand)=>void}){return <div className="tablewrap"><table><thead><tr><th>Demanda</th><th>Produto</th><th>Responsável</th><th>Status</th><th>Prioridade</th><th>Progresso</th><th>Prazo</th><th>Risco</th>{onEdit&&<th className="actions-head">Ações</th>}</tr></thead><tbody>{rows.map(d=><tr key={d.id}><td><b>{d.name}</b><small>{d.id}</small></td><td>{d.product}</td><td><span className="person">{d.owner[0]}</span>{d.owner}</td><td><Badge tone={d.status==='Bloqueada'?'bad':d.status==='Concluída'?'good':'blue'}>{d.status}</Badge></td><td>{d.priority}</td><td><div className="mini"><i style={{width:d.progress+'%'}}/></div><small>{d.progress}%</small></td><td>{d.due}</td><td><Badge tone={d.risk==='Crítico'?'bad':d.risk==='Alto'?'warn':d.risk==='Baixo'?'good':'gray'}>{d.risk}</Badge></td>{onEdit&&<td><div className="row-actions"><button title="Editar demanda" aria-label={`Editar ${d.id}`} onClick={()=>onEdit(d)}><I.Pencil/></button><button className="delete" title="Excluir demanda" aria-label={`Excluir ${d.id}`} onClick={()=>onRemove?.(d)}><I.Trash2/></button></div></td>}</tr>)}</tbody></table></div>}
+function Roadmap() {
+  const { rows, roadmap, setRoadmap } = useDemands();
+  const { team } = useTeam();
+  const [view, setView] = useState("Timeline");
+  const [quarter, setQuarter] = useState("Q3 2026");
+  const [picker, setPicker] = useState(false);
+  const [staffFor, setStaffFor] = useState<RoadmapEntry | null>(null);
+  const items = roadmap.flatMap((entry) => {
+    const demand = rows.find((d) => d.id === entry.demandId);
+    return entry.quarter === quarter && demand ? [{ demand, entry }] : [];
+  });
+  const available = rows.filter((d) => !roadmap.some((r) => r.demandId === d.id));
+  const months = quarterMonths[quarter.slice(0, 2)];
+  const add = (id: string) => {
+    setRoadmap((current) => [...current, { demandId: id, quarter, collaborators: [] }]);
+    setPicker(false);
+  };
+  const move = (id: string, destination: string) =>
+    setRoadmap((current) => current.map((r) => r.demandId === id ? { ...r, quarter: destination } : r));
+  const remove = (id: string) =>
+    setRoadmap((current) => current.filter((r) => r.demandId !== id));
+  const toggleStaff = (name: string) => {
+    if (!staffFor) return;
+    const collaborators = staffFor.collaborators.includes(name)
+      ? staffFor.collaborators.filter((person) => person !== name)
+      : [...staffFor.collaborators, name];
+    const updated = { ...staffFor, collaborators };
+    setStaffFor(updated);
+    setRoadmap((current) => current.map((r) => r.demandId === updated.demandId ? updated : r));
+  };
+  return (
+    <>
+      <PageHead
+        title="Roadmap trimestral"
+        desc="Planeje demandas por quarter e defina os colaboradores responsáveis."
+        action={
+          <button className="primary" onClick={() => setPicker(true)}>
+            <I.ListPlus /> Planejar demanda cadastrada
+          </button>
+        }
+      />
+      <div className="roadmap-source">
+        <I.Link2 />
+        <span>
+          <b>Demandas são a fonte única.</b> Não é possível criar itens diretamente
+          no Roadmap; aqui você apenas planeja demandas já cadastradas.
+        </span>
+        <Badge tone="good">{items.length} neste quarter</Badge>
+      </div>
+      <div className="toolbar">
+        <div className="seg">
+          {["Timeline", "Lista"].map((x) => (
+            <button
+              key={x}
+              className={view === x ? "active" : ""}
+              onClick={() => setView(x)}
+            >
+              {x}
+            </button>
+          ))}
+        </div>
+        <label className="quarter-select"><I.CalendarRange/><select value={quarter} onChange={(e) => setQuarter(e.target.value)}>{quarters.map((q) => <option key={q}>{q}</option>)}</select></label>
+      </div>
+      {items.length === 0 ? (
+        <Card className="roadmap-empty">
+          <I.Map />
+          <h3>Nenhuma demanda em {quarter}</h3>
+          <p>Planeje uma demanda cadastrada ou mova uma demanda de outro quarter.</p>
+          <button className="primary" onClick={() => setPicker(true)}>
+            <I.ListPlus /> Selecionar demanda
+          </button>
+        </Card>
+      ) : view === "Timeline" ? (
+        <Timeline items={items} months={months} onMove={move} onStaff={setStaffFor} />
+      ) : (
+        <RoadmapList items={items} onMove={move} onStaff={setStaffFor} onRemove={remove} />
+      )}
+      {picker && (
+        <div
+          className="overlay roadmap-picker-overlay"
+          onMouseDown={() => setPicker(false)}
+        >
+          <div
+            className="roadmap-picker"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <span className="modal-icon">
+                  <I.ListPlus />
+                </span>
+                <div>
+                  <h2>Planejar demanda em {quarter}</h2>
+                  <p>Somente demandas previamente cadastradas estão disponíveis.</p>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setPicker(false)}>
+                <I.X />
+              </button>
+            </div>
+            <div className="picker-list">
+              {available.length === 0 ? (
+                <div className="picker-empty">
+                  <I.CircleCheck />
+                  <b>Todas as demandas já estão planejadas</b>
+                  <span>
+                    Cadastre uma nova demanda para disponibilizá-la aqui.
+                  </span>
+                </div>
+              ) : (
+                available.map((d) => (
+                  <button key={d.id} onClick={() => add(d.id)}>
+                    <span className="person">{d.owner[0]}</span>
+                    <div>
+                      <b>{d.name}</b>
+                      <small>
+                        {d.id} · {d.product} · {d.effort}h
+                      </small>
+                    </div>
+                    <Badge tone={d.priority === "Crítica" ? "bad" : "gray"}>
+                      {d.priority}
+                    </Badge>
+                    <I.Plus />
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="picker-foot">
+              <button className="ghost" onClick={() => setPicker(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {staffFor && <div className="overlay confirm-overlay" onMouseDown={() => setStaffFor(null)}><div className="staff-roadmap-modal" onMouseDown={(e) => e.stopPropagation()}><div className="modal-head"><div><span className="modal-icon"><I.UsersRound/></span><div><h2>Colaboradores da demanda</h2><p>{rows.find((d) => d.id === staffFor.demandId)?.name}</p></div></div><button className="modal-close" onClick={() => setStaffFor(null)}><I.X/></button></div><div className="staff-check-list">{team.map((person) => <label key={person.id}><input type="checkbox" checked={staffFor.collaborators.includes(person.name)} onChange={() => toggleStaff(person.name)}/><span className="avatar">{person.name.split(" ").map((x) => x[0]).slice(0, 2).join("")}</span><div><b>{person.name}</b><small>{person.role} · {person.total - person.used}h disponíveis</small></div></label>)}</div><div className="picker-foot"><button className="primary" onClick={() => setStaffFor(null)}><I.Check/> Concluir</button></div></div></div>}
+    </>
+  );
+}
+function Timeline({
+  items,
+  months,
+  onMove,
+  onStaff,
+}: {
+  items: { demand: Demand; entry: RoadmapEntry }[];
+  months: string[];
+  onMove: (id: string, quarter: string) => void;
+  onStaff: (entry: RoadmapEntry) => void;
+}) {
+  return (
+    <Card>
+      <div className="timeline">
+        <div className="tlhead">
+          <b>Demanda</b>
+          {months.map((month) => <span key={month}>{month}</span>)}
+        </div>
+        {items.map(({ demand: d, entry }, i) => (
+          <div className="tlrow" key={d.id}>
+            <div>
+              <b>{d.name}</b>
+              <small>{d.id} · {entry.collaborators.length || 0} colaborador(es) · {d.effort}h</small>
+            </div>
+            <div className="track">
+              <span
+                className={"bar b" + (i % 5)}
+                style={{
+                  width: `${Math.min(58, 28 + i * 7)}%`,
+                  left: `${Math.min(55, i * 9)}%`,
+                }}
+              >
+                <em>{d.progress}%</em>
+              </span>
+              <i style={{ left: "66%" }} />
+              <div className="timeline-actions"><button title="Definir colaboradores" onClick={() => onStaff(entry)}><I.Users/></button><select title="Mover para outro quarter" value={entry.quarter} onChange={(e) => onMove(d.id, e.target.value)}>{quarters.map((q) => <option key={q}>{q}</option>)}</select></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+function RoadmapList({
+  items,
+  onMove,
+  onStaff,
+  onRemove,
+}: {
+  items: { demand: Demand; entry: RoadmapEntry }[];
+  onMove: (id: string, quarter: string) => void;
+  onStaff: (entry: RoadmapEntry) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <Card>
+      <div className="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Demanda</th>
+              <th>Produto</th>
+              <th>Colaboradores</th>
+              <th>Status</th>
+              <th>Prioridade</th>
+              <th>Esforço</th>
+              <th>Quarter</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(({ demand: d, entry }) => (
+              <tr key={d.id}>
+                <td>
+                  <b>{d.name}</b>
+                  <small>{d.id}</small>
+                </td>
+                <td>{d.product}</td>
+                <td>
+                  <button className="staff-link" onClick={() => onStaff(entry)}><I.Users/>{entry.collaborators.length ? `${entry.collaborators.length} alocados` : "Adicionar"}</button>
+                </td>
+                <td>
+                  <Badge>{d.status}</Badge>
+                </td>
+                <td>{d.priority}</td>
+                <td>{d.effort}h</td>
+                <td><select className="quarter-inline" value={entry.quarter} onChange={(e) => onMove(d.id, e.target.value)}>{quarters.map((q) => <option key={q}>{q}</option>)}</select></td>
+                <td>
+                  <button
+                    className="unlink-button"
+                    onClick={() => onRemove(d.id)}
+                  >
+                    <I.Unlink /> Remover
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
 
-type Staff={id:number;name:string;role:string;total:number;used:number};
-const initialStaff:Staff[]=members.map(([name,role,total,used],i)=>({id:i+1,name:String(name),role:String(role),total:Number(total),used:Number(used)}));
-const emptyStaff={name:'',role:'Backend',total:'130',used:'0'};
-function Capacity(){const [team,setTeam]=useState<Staff[]>(initialStaff);const [form,setForm]=useState(emptyStaff);const [editing,setEditing]=useState<Staff|null>(null);const [removing,setRemoving]=useState<Staff|null>(null);const [modal,setModal]=useState(false);const [error,setError]=useState('');const total=team.reduce((sum,m)=>sum+m.total,0);const used=team.reduce((sum,m)=>sum+m.used,0);const free=total-used;const overloaded=team.filter(m=>m.used/m.total>.9).length;const openNew=()=>{setEditing(null);setForm(emptyStaff);setError('');setModal(true)};const openEdit=(m:Staff)=>{setEditing(m);setForm({name:m.name,role:m.role,total:String(m.total),used:String(m.used)});setError('');setModal(true)};const close=()=>{setModal(false);setEditing(null);setError('')};const submit=(e:React.FormEvent)=>{e.preventDefault();const cap=Number(form.total),allocation=Number(form.used);if(!form.name.trim()){setError('Informe o nome do colaborador.');return}if(cap<=0||allocation<0){setError('Informe valores válidos para capacidade e alocação.');return}const data:Staff={id:editing?.id||Date.now(),name:form.name.trim(),role:form.role,total:cap,used:allocation};setTeam(editing?team.map(m=>m.id===editing.id?data:m):[...team,data]);close()};const confirmRemove=()=>{if(removing)setTeam(team.filter(m=>m.id!==removing.id));setRemoving(null)};return <><PageHead title="Capacidade do time" desc="Visualize alocação, disponibilidade e pontos de sobrecarga." action={<button className="primary" onClick={openNew}><I.UserPlus/> Novo colaborador</button>}/><div className="kpis compact"><Card><span>Capacidade total</span><strong>{total}h</strong><small>{team.length} colaboradores</small></Card><Card><span>Alocada</span><strong>{used}h</strong><small className="warn">{total?Math.round(used/total*100):0}% utilizada</small></Card><Card><span>Disponível</span><strong className={free<0?'bad':''}>{free}h</strong><small className={free<0?'bad':'good'}>{free<0?'Capacidade excedida':'Reserva disponível'}</small></Card><Card><span>Sobrecarregados</span><strong>{overloaded}</strong><small className={overloaded?'bad':'good'}>{overloaded?'Requer atenção':'Time equilibrado'}</small></Card></div><Card><div className="cardhead"><div><h3>Alocação por colaborador</h3><p>Capacidade planejada para setembro</p></div><Badge tone="gray">{team.length} pessoas</Badge></div><div className="people">{team.map(m=>{const pct=Math.round(m.used/m.total*100);return <div className="member member-managed" key={m.id}><span className="avatar">{m.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><div><b>{m.name}</b><small>{m.role}</small></div><div className="usage"><div><i className={pct>90?'hot':''} style={{width:Math.min(pct,100)+'%'}}/></div><small>{m.used}h de {m.total}h</small></div><b className={pct>90?'bad':''}>{pct}%</b><span className={m.total-m.used<0?'bad':''}>{m.total-m.used}h livres</span><div className="row-actions"><button title="Editar colaborador" onClick={()=>openEdit(m)}><I.Pencil/></button><button className="delete" title="Excluir colaborador" onClick={()=>setRemoving(m)}><I.Trash2/></button></div></div>})}{team.length===0&&<div className="team-empty"><I.Users/><b>Nenhum colaborador cadastrado</b><button className="primary" onClick={openNew}>Adicionar colaborador</button></div>}</div></Card>{modal&&<div className="overlay confirm-overlay" onMouseDown={close}><form className="staff-modal" onMouseDown={e=>e.stopPropagation()} onSubmit={submit}><div className="modal-head"><div><span className="modal-icon">{editing?<I.UserRoundPen/>:<I.UserPlus/>}</span><div><h2>{editing?'Editar colaborador':'Novo colaborador'}</h2><p>Defina o perfil e a capacidade disponível no período.</p></div></div><button type="button" className="modal-close" onClick={close}><I.X/></button></div><div className="staff-form"><div className="form-field wide"><label>Nome completo <em>*</em></label><input autoFocus value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Ex.: Ana Oliveira" className={error&& !form.name?'invalid':''}/></div><div className="form-field wide"><label>Função</label><select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option>Tech Lead</option><option>Backend</option><option>Frontend</option><option>Full Stack</option><option>UX Engineer</option><option>QA Engineer</option><option>Product Manager</option></select></div><div className="form-field"><label>Capacidade (horas)</label><input type="number" min="1" value={form.total} onChange={e=>setForm({...form,total:e.target.value})}/></div><div className="form-field"><label>Horas alocadas</label><input type="number" min="0" value={form.used} onChange={e=>setForm({...form,used:e.target.value})}/></div>{error&&<div className="staff-error"><I.CircleAlert/>{error}</div>}</div><div className="modal-actions"><button type="button" className="ghost" onClick={close}>Cancelar</button><button className="primary" type="submit">{editing?<I.Save/>:<I.UserPlus/>}{editing?'Salvar alterações':'Adicionar colaborador'}</button></div></form></div>}{removing&&<div className="overlay confirm-overlay" onMouseDown={()=>setRemoving(null)}><div className="confirm-modal" onMouseDown={e=>e.stopPropagation()}><span><I.UserRoundX/></span><h3>Excluir colaborador?</h3><p><b>{removing.name}</b> será removido do planejamento de capacidade. Esta ação não poderá ser desfeita.</p><div><button className="ghost" onClick={()=>setRemoving(null)}>Cancelar</button><button className="danger" onClick={confirmRemove}><I.Trash2/> Excluir colaborador</button></div></div></div>}</>}
+const emptyDemandForm = {
+  name: "",
+  description: "",
+  product: "Commerce",
+  type: "Evolutiva",
+  origin: "Produto",
+  requester: "",
+  priority: "Média",
+  due: "",
+  effort: "40",
+  owner: "",
+  dependencies: "",
+  justification: "",
+  impact: "",
+};
+function Demands() {
+  const [q, setQ] = useState("");
+  const { rows, setRows } = useDemands();
+  const [modal, setModal] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState<Demand | null>(null);
+  const [removing, setRemoving] = useState<Demand | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [form, setForm] = useState(emptyDemandForm);
+  const filtered = rows.filter((d) =>
+    (d.name + d.id + d.product).toLowerCase().includes(q.toLowerCase()),
+  );
+  const change = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
+  ) => setForm({ ...form, [e.target.name]: e.target.value });
+  const close = () => {
+    setModal(false);
+    setEditing(null);
+    setErrors({});
+    setForm(emptyDemandForm);
+  };
+  const openNew = () => {
+    setEditing(null);
+    setForm(emptyDemandForm);
+    setModal(true);
+  };
+  const openEdit = (d: Demand) => {
+    const month: Record<string, string> = {
+      jan: "01",
+      fev: "02",
+      mar: "03",
+      abr: "04",
+      mai: "05",
+      jun: "06",
+      jul: "07",
+      ago: "08",
+      set: "09",
+      out: "10",
+      nov: "11",
+      dez: "12",
+    };
+    const parts = d.due.toLowerCase().split(" ");
+    setEditing(d);
+    setForm({
+      ...emptyDemandForm,
+      name: d.name,
+      product: d.product,
+      priority: d.priority,
+      effort: String(d.effort),
+      owner: d.owner,
+      requester: d.owner,
+      due:
+        parts.length === 2
+          ? `2026-${month[parts[1]] || "09"}-${parts[0].padStart(2, "0")}`
+          : "",
+    });
+    setModal(true);
+  };
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const next: Record<string, string> = {};
+    if (!form.name.trim()) next.name = "Informe o título da demanda.";
+    if (!form.requester.trim()) next.requester = "Informe o solicitante.";
+    if (!form.owner) next.owner = "Selecione um responsável.";
+    if (!form.due) next.due = "Informe o prazo desejado.";
+    if (Number(form.effort) <= 0) next.effort = "Informe um esforço válido.";
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    const date = new Date(form.due + "T12:00:00");
+    const due = date
+      .toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+      .replace(".", "");
+    const data: Demand = {
+      id: editing?.id || `DEV-${160 + rows.length}`,
+      name: form.name.trim(),
+      product: form.product,
+      owner: form.owner,
+      status: editing?.status || "Backlog",
+      priority: form.priority,
+      effort: Number(form.effort),
+      progress: editing?.progress || 0,
+      due,
+      risk: form.priority === "Crítica" ? "Alto" : editing?.risk || "Médio",
+    };
+    setRows(
+      editing
+        ? rows.map((row) => (row.id === editing.id ? data : row))
+        : [data, ...rows],
+    );
+    close();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3500);
+  };
+  const confirmRemove = () => {
+    if (!removing) return;
+    setRows(rows.filter((row) => row.id !== removing.id));
+    setRemoving(null);
+  };
+  return (
+    <>
+      <PageHead
+        title="Gestão de demandas"
+        desc="Priorize, acompanhe e entenda o impacto de cada entrega."
+        action={
+          <button className="primary" onClick={openNew}>
+            <I.Plus /> Nova demanda
+          </button>
+        }
+      />
+      <div className="toolbar">
+        <label className="search inner">
+          <I.Search />
+          <input
+            placeholder="Buscar demandas..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
+        <button>
+          <I.Filter /> Filtros <Badge>3</Badge>
+        </button>
+        <button>
+          <I.Download /> Exportar
+        </button>
+      </div>
+      <Card>
+        <div className="cardhead">
+          <div>
+            <h3>Todas as demandas</h3>
+            <p>{filtered.length} resultados · atualizado agora</p>
+          </div>
+          <div className="seg">
+            <button className="active">
+              <I.List /> Lista
+            </button>
+            <button>
+              <I.Columns3 /> Board
+            </button>
+          </div>
+        </div>
+        <DemandTableRows
+          rows={filtered}
+          onEdit={openEdit}
+          onRemove={setRemoving}
+        />
+      </Card>
+      {modal && (
+        <div className="overlay demand-overlay" onMouseDown={close}>
+          <form
+            className="demand-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+            onSubmit={submit}
+          >
+            <div className="modal-head">
+              <div>
+                <span className="modal-icon">
+                  <I.ListPlus />
+                </span>
+                <div>
+                  <h2>Nova demanda</h2>
+                  <p>
+                    Cadastre a demanda para avaliar seu impacto no planejamento.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={close}
+                aria-label="Fechar"
+              >
+                <I.X />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-field wide">
+                <label htmlFor="name">
+                  Título <em>*</em>
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  value={form.name}
+                  onChange={change}
+                  placeholder="Ex.: Integração com novo gateway"
+                  autoFocus
+                  className={errors.name ? "invalid" : ""}
+                />
+                {errors.name && (
+                  <small className="field-error">{errors.name}</small>
+                )}
+              </div>
+              <div className="form-field wide">
+                <label htmlFor="description">Descrição</label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={form.description}
+                  onChange={change}
+                  placeholder="Descreva o contexto e o resultado esperado"
+                  rows={3}
+                />
+              </div>
+              <div className="form-field">
+                <label>
+                  Produto <em>*</em>
+                </label>
+                <select name="product" value={form.product} onChange={change}>
+                  <option>Commerce</option>
+                  <option>Payments</option>
+                  <option>Customer</option>
+                  <option>Platform</option>
+                  <option>Analytics</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label>
+                  Tipo <em>*</em>
+                </label>
+                <select name="type" value={form.type} onChange={change}>
+                  <option>Estratégica</option>
+                  <option>Evolutiva</option>
+                  <option>Bug</option>
+                  <option>Incidente</option>
+                  <option>Sustentação</option>
+                  <option>Regulatória</option>
+                  <option>Técnica</option>
+                  <option>Emergencial</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label>Origem</label>
+                <select name="origin" value={form.origin} onChange={change}>
+                  <option>Produto</option>
+                  <option>Cliente</option>
+                  <option>Tecnologia</option>
+                  <option>Regulatório</option>
+                  <option>Operações</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label htmlFor="requester">
+                  Solicitante <em>*</em>
+                </label>
+                <input
+                  id="requester"
+                  name="requester"
+                  value={form.requester}
+                  onChange={change}
+                  placeholder="Nome do solicitante"
+                  className={errors.requester ? "invalid" : ""}
+                />
+                {errors.requester && (
+                  <small className="field-error">{errors.requester}</small>
+                )}
+              </div>
+              <div className="form-field">
+                <label>Prioridade</label>
+                <select name="priority" value={form.priority} onChange={change}>
+                  <option>Baixa</option>
+                  <option>Média</option>
+                  <option>Alta</option>
+                  <option>Crítica</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label htmlFor="due">
+                  Prazo desejado <em>*</em>
+                </label>
+                <input
+                  id="due"
+                  type="date"
+                  name="due"
+                  value={form.due}
+                  onChange={change}
+                  className={errors.due ? "invalid" : ""}
+                />
+                {errors.due && (
+                  <small className="field-error">{errors.due}</small>
+                )}
+              </div>
+              <div className="form-field">
+                <label htmlFor="effort">Esforço estimado (horas)</label>
+                <input
+                  id="effort"
+                  type="number"
+                  min="1"
+                  name="effort"
+                  value={form.effort}
+                  onChange={change}
+                  className={errors.effort ? "invalid" : ""}
+                />
+                {errors.effort && (
+                  <small className="field-error">{errors.effort}</small>
+                )}
+              </div>
+              <div className="form-field">
+                <label>
+                  Responsável <em>*</em>
+                </label>
+                <select
+                  name="owner"
+                  value={form.owner}
+                  onChange={change}
+                  className={errors.owner ? "invalid" : ""}
+                >
+                  <option value="">Selecione...</option>
+                  {members.map(([name]) => (
+                    <option key={name as string}>
+                      {String(name).split(" ")[0]}
+                    </option>
+                  ))}
+                </select>
+                {errors.owner && (
+                  <small className="field-error">{errors.owner}</small>
+                )}
+              </div>
+              <div className="form-field wide">
+                <label>Dependências</label>
+                <input
+                  name="dependencies"
+                  value={form.dependencies}
+                  onChange={change}
+                  placeholder="Outros times, sistemas ou demandas"
+                />
+              </div>
+              <div className="form-field">
+                <label>Justificativa</label>
+                <textarea
+                  name="justification"
+                  value={form.justification}
+                  onChange={change}
+                  rows={2}
+                  placeholder="Por que esta demanda é necessária?"
+                />
+              </div>
+              <div className="form-field">
+                <label>Impacto esperado</label>
+                <textarea
+                  name="impact"
+                  value={form.impact}
+                  onChange={change}
+                  rows={2}
+                  placeholder="Benefícios e resultados esperados"
+                />
+              </div>
+            </div>
+            <div className="capacity-preview">
+              <I.Gauge />
+              <div>
+                <b>Impacto preliminar na capacidade</b>
+                <p>
+                  A demanda consumirá {form.effort || 0}h. O impacto detalhado
+                  será calculado após o cadastro.
+                </p>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={close}>
+                Cancelar
+              </button>
+              <button type="submit" className="primary">
+                <I.Plus /> Cadastrar demanda
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {removing && (
+        <div
+          className="overlay confirm-overlay"
+          onMouseDown={() => setRemoving(null)}
+        >
+          <div
+            className="confirm-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <span>
+              <I.Trash2 />
+            </span>
+            <h3>Excluir demanda?</h3>
+            <p>
+              A demanda{" "}
+              <b>
+                {removing.id} — {removing.name}
+              </b>{" "}
+              será removida da lista. Esta ação não poderá ser desfeita.
+            </p>
+            <div>
+              <button className="ghost" onClick={() => setRemoving(null)}>
+                Cancelar
+              </button>
+              <button className="danger" onClick={confirmRemove}>
+                <I.Trash2 /> Excluir demanda
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {saved && (
+        <div className="toast-success">
+          <I.CircleCheck />
+          <div>
+            <b>Demanda salva</b>
+            <span>As informações foram atualizadas com sucesso.</span>
+          </div>
+          <button onClick={() => setSaved(false)}>
+            <I.X />
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+function DemandTableRows({
+  rows,
+  onEdit,
+  onRemove,
+}: {
+  rows: Demand[];
+  onEdit?: (d: Demand) => void;
+  onRemove?: (d: Demand) => void;
+}) {
+  return (
+    <div className="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Demanda</th>
+            <th>Produto</th>
+            <th>Responsável</th>
+            <th>Status</th>
+            <th>Prioridade</th>
+            <th>Progresso</th>
+            <th>Prazo</th>
+            <th>Risco</th>
+            {onEdit && <th className="actions-head">Ações</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((d) => (
+            <tr key={d.id}>
+              <td>
+                <b>{d.name}</b>
+                <small>{d.id}</small>
+              </td>
+              <td>{d.product}</td>
+              <td>
+                <span className="person">{d.owner[0]}</span>
+                {d.owner}
+              </td>
+              <td>
+                <Badge
+                  tone={
+                    d.status === "Bloqueada"
+                      ? "bad"
+                      : d.status === "Concluída"
+                        ? "good"
+                        : "blue"
+                  }
+                >
+                  {d.status}
+                </Badge>
+              </td>
+              <td>{d.priority}</td>
+              <td>
+                <div className="mini">
+                  <i style={{ width: d.progress + "%" }} />
+                </div>
+                <small>{d.progress}%</small>
+              </td>
+              <td>{d.due}</td>
+              <td>
+                <Badge
+                  tone={
+                    d.risk === "Crítico"
+                      ? "bad"
+                      : d.risk === "Alto"
+                        ? "warn"
+                        : d.risk === "Baixo"
+                          ? "good"
+                          : "gray"
+                  }
+                >
+                  {d.risk}
+                </Badge>
+              </td>
+              {onEdit && (
+                <td>
+                  <div className="row-actions">
+                    <button
+                      title="Editar demanda"
+                      aria-label={`Editar ${d.id}`}
+                      onClick={() => onEdit(d)}
+                    >
+                      <I.Pencil />
+                    </button>
+                    <button
+                      className="delete"
+                      title="Excluir demanda"
+                      aria-label={`Excluir ${d.id}`}
+                      onClick={() => onRemove?.(d)}
+                    >
+                      <I.Trash2 />
+                    </button>
+                  </div>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-function Planning(){const [hours,setHours]=useState(60);const occupancy=Math.round((852+hours)/1040*100);return <><PageHead title="Simulação de cenários" desc="Teste decisões antes de comprometer o planejamento real."/><div className="scenario"><Card><div className="cardhead"><div><h3>Configurar mudança</h3><p>Adicione uma demanda hipotética</p></div></div><label>Título<input defaultValue="Nova demanda estratégica"/></label><div className="form2"><label>Tipo<select><option>Estratégica</option><option>Emergencial</option></select></label><label>Prioridade<select><option>Alta</option><option>Crítica</option></select></label></div><label>Esforço estimado <b>{hours}h</b><input type="range" min="10" max="180" value={hours} onChange={e=>setHours(+e.target.value)}/></label><button className="primary full"><I.Play/> Recalcular cenário</button></Card><Card className="impact"><div className="cardhead"><div><h3>Impacto projetado</h3><p>Comparação com o cenário atual</p></div><Badge tone={occupancy>90?'bad':'warn'}>{occupancy>90?'Alto impacto':'Atenção'}</Badge></div><div className="compare"><div><span>CENÁRIO ATUAL</span><strong>82%</strong><small>852h comprometidas</small></div><I.ArrowRight/><div><span>CENÁRIO SIMULADO</span><strong className={occupancy>90?'bad':''}>{occupancy}%</strong><small>{852+hours}h comprometidas</small></div></div><div className="alert bad"><I.TriangleAlert/><div><b>Capacidade próxima do limite</b><p>A mudança pode impactar 2 entregas do roadmap.</p></div></div><div className="impactrow"><span><i className="dot bad"/><b>Portal de autoatendimento</b></span><b>+5 dias</b></div><div className="impactrow"><span><i className="dot warn"/><b>Novo checkout omnichannel</b></span><b>+2 dias</b></div><button className="primary full">Aplicar ao planejamento</button></Card></div></>}
+type Staff = {
+  id: number;
+  name: string;
+  role: string;
+  total: number;
+  used: number;
+};
+const initialStaff: Staff[] = members.map(([name, role, total, used], i) => ({
+  id: i + 1,
+  name: String(name),
+  role: String(role),
+  total: Number(total),
+  used: Number(used),
+}));
+const TeamContext = createContext<{
+  team: Staff[];
+  setTeam: React.Dispatch<React.SetStateAction<Staff[]>>;
+} | null>(null);
+function TeamProvider({ children }: { children: React.ReactNode }) {
+  const [team, setTeam] = useState<Staff[]>(initialStaff);
+  return (
+    <TeamContext.Provider value={{ team, setTeam }}>
+      {children}
+    </TeamContext.Provider>
+  );
+}
+function useTeam() {
+  const value = useContext(TeamContext);
+  if (!value) throw new Error("TeamProvider ausente");
+  return value;
+}
+const emptyStaff = { name: "", role: "Backend", total: "130", used: "0" };
+function Capacity() {
+  const { team, setTeam } = useTeam();
+  const [form, setForm] = useState(emptyStaff);
+  const [editing, setEditing] = useState<Staff | null>(null);
+  const [removing, setRemoving] = useState<Staff | null>(null);
+  const [modal, setModal] = useState(false);
+  const [error, setError] = useState("");
+  const total = team.reduce((sum, m) => sum + m.total, 0);
+  const used = team.reduce((sum, m) => sum + m.used, 0);
+  const free = total - used;
+  const overloaded = team.filter((m) => m.used / m.total > 0.9).length;
+  const openNew = () => {
+    setEditing(null);
+    setForm(emptyStaff);
+    setError("");
+    setModal(true);
+  };
+  const openEdit = (m: Staff) => {
+    setEditing(m);
+    setForm({
+      name: m.name,
+      role: m.role,
+      total: String(m.total),
+      used: String(m.used),
+    });
+    setError("");
+    setModal(true);
+  };
+  const close = () => {
+    setModal(false);
+    setEditing(null);
+    setError("");
+  };
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cap = Number(form.total),
+      allocation = Number(form.used);
+    if (!form.name.trim()) {
+      setError("Informe o nome do colaborador.");
+      return;
+    }
+    if (cap <= 0 || allocation < 0) {
+      setError("Informe valores válidos para capacidade e alocação.");
+      return;
+    }
+    const data: Staff = {
+      id: editing?.id || Date.now(),
+      name: form.name.trim(),
+      role: form.role,
+      total: cap,
+      used: allocation,
+    };
+    setTeam(
+      editing
+        ? team.map((m) => (m.id === editing.id ? data : m))
+        : [...team, data],
+    );
+    close();
+  };
+  const confirmRemove = () => {
+    if (removing) setTeam(team.filter((m) => m.id !== removing.id));
+    setRemoving(null);
+  };
+  return (
+    <>
+      <PageHead
+        title="Capacidade do time"
+        desc="Visualize alocação, disponibilidade e pontos de sobrecarga."
+        action={
+          <button className="primary" onClick={openNew}>
+            <I.UserPlus /> Novo colaborador
+          </button>
+        }
+      />
+      <div className="kpis compact">
+        <Card>
+          <span>Capacidade total</span>
+          <strong>{total}h</strong>
+          <small>{team.length} colaboradores</small>
+        </Card>
+        <Card>
+          <span>Alocada</span>
+          <strong>{used}h</strong>
+          <small className="warn">
+            {total ? Math.round((used / total) * 100) : 0}% utilizada
+          </small>
+        </Card>
+        <Card>
+          <span>Disponível</span>
+          <strong className={free < 0 ? "bad" : ""}>{free}h</strong>
+          <small className={free < 0 ? "bad" : "good"}>
+            {free < 0 ? "Capacidade excedida" : "Reserva disponível"}
+          </small>
+        </Card>
+        <Card>
+          <span>Sobrecarregados</span>
+          <strong>{overloaded}</strong>
+          <small className={overloaded ? "bad" : "good"}>
+            {overloaded ? "Requer atenção" : "Time equilibrado"}
+          </small>
+        </Card>
+      </div>
+      <Card>
+        <div className="cardhead">
+          <div>
+            <h3>Alocação por colaborador</h3>
+            <p>Capacidade planejada para setembro</p>
+          </div>
+          <Badge tone="gray">{team.length} pessoas</Badge>
+        </div>
+        <div className="people">
+          {team.map((m) => {
+            const pct = Math.round((m.used / m.total) * 100);
+            return (
+              <div className="member member-managed" key={m.id}>
+                <span className="avatar">
+                  {m.name
+                    .split(" ")
+                    .map((x) => x[0])
+                    .slice(0, 2)
+                    .join("")}
+                </span>
+                <div>
+                  <b>{m.name}</b>
+                  <small>{m.role}</small>
+                </div>
+                <div className="usage">
+                  <div>
+                    <i
+                      className={pct > 90 ? "hot" : ""}
+                      style={{ width: Math.min(pct, 100) + "%" }}
+                    />
+                  </div>
+                  <small>
+                    {m.used}h de {m.total}h
+                  </small>
+                </div>
+                <b className={pct > 90 ? "bad" : ""}>{pct}%</b>
+                <span className={m.total - m.used < 0 ? "bad" : ""}>
+                  {m.total - m.used}h livres
+                </span>
+                <div className="row-actions">
+                  <button
+                    title="Editar colaborador"
+                    onClick={() => openEdit(m)}
+                  >
+                    <I.Pencil />
+                  </button>
+                  <button
+                    className="delete"
+                    title="Excluir colaborador"
+                    onClick={() => setRemoving(m)}
+                  >
+                    <I.Trash2 />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {team.length === 0 && (
+            <div className="team-empty">
+              <I.Users />
+              <b>Nenhum colaborador cadastrado</b>
+              <button className="primary" onClick={openNew}>
+                Adicionar colaborador
+              </button>
+            </div>
+          )}
+        </div>
+      </Card>
+      {modal && (
+        <div className="overlay confirm-overlay" onMouseDown={close}>
+          <form
+            className="staff-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+            onSubmit={submit}
+          >
+            <div className="modal-head">
+              <div>
+                <span className="modal-icon">
+                  {editing ? <I.UserRoundPen /> : <I.UserPlus />}
+                </span>
+                <div>
+                  <h2>{editing ? "Editar colaborador" : "Novo colaborador"}</h2>
+                  <p>Defina o perfil e a capacidade disponível no período.</p>
+                </div>
+              </div>
+              <button type="button" className="modal-close" onClick={close}>
+                <I.X />
+              </button>
+            </div>
+            <div className="staff-form">
+              <div className="form-field wide">
+                <label>
+                  Nome completo <em>*</em>
+                </label>
+                <input
+                  autoFocus
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Ex.: Ana Oliveira"
+                  className={error && !form.name ? "invalid" : ""}
+                />
+              </div>
+              <div className="form-field wide">
+                <label>Função</label>
+                <select
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                >
+                  <option>Tech Lead</option>
+                  <option>Backend</option>
+                  <option>Frontend</option>
+                  <option>Full Stack</option>
+                  <option>UX Engineer</option>
+                  <option>QA Engineer</option>
+                  <option>Product Manager</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label>Capacidade (horas)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.total}
+                  onChange={(e) => setForm({ ...form, total: e.target.value })}
+                />
+              </div>
+              <div className="form-field">
+                <label>Horas alocadas</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.used}
+                  onChange={(e) => setForm({ ...form, used: e.target.value })}
+                />
+              </div>
+              {error && (
+                <div className="staff-error">
+                  <I.CircleAlert />
+                  {error}
+                </div>
+              )}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={close}>
+                Cancelar
+              </button>
+              <button className="primary" type="submit">
+                {editing ? <I.Save /> : <I.UserPlus />}
+                {editing ? "Salvar alterações" : "Adicionar colaborador"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {removing && (
+        <div
+          className="overlay confirm-overlay"
+          onMouseDown={() => setRemoving(null)}
+        >
+          <div
+            className="confirm-modal"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <span>
+              <I.UserRoundX />
+            </span>
+            <h3>Excluir colaborador?</h3>
+            <p>
+              <b>{removing.name}</b> será removido do planejamento de
+              capacidade. Esta ação não poderá ser desfeita.
+            </p>
+            <div>
+              <button className="ghost" onClick={() => setRemoving(null)}>
+                Cancelar
+              </button>
+              <button className="danger" onClick={confirmRemove}>
+                <I.Trash2 /> Excluir colaborador
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
-function Risks(){return <><PageHead title="Mapa de riscos" desc="Antecipe ameaças e acompanhe os planos de mitigação." action={<button className="primary"><I.Plus/> Novo risco</button>}/><div className="riskgrid"><Card><div className="cardhead"><div><h3>Matriz de probabilidade × impacto</h3><p>Clique em uma célula para filtrar</p></div></div><div className="matrix"><span/><b>Baixo</b><b>Médio</b><b>Alto</b><b>Crítico</b>{['Alta','Média','Baixa'].map((r,ri)=><React.Fragment key={r}><b>{r}</b>{[0,1,2,3].map((_,ci)=><div className={'cell c'+Math.min(3,ci+(2-ri))}>{ri===0&&ci===2?<i>2</i>:ri===1&&ci===3?<i>1</i>:''}</div>)}</React.Fragment>)}</div></Card><Card><div className="cardhead"><div><h3>Riscos prioritários</h3><p>Ordenados por exposição</p></div></div>{['Dependência da API antifraude','Capacidade de backend em setembro','Prazo regulatório inegociável'].map((x,i)=><div className="riskitem"><span className={'risknum r'+i}>{i+1}</span><div><b>{x}</b><small>{['DEV-148 · Rafael Lima','Time Backend · Marina Costa','DEV-154 · Lucas Rocha'][i]}</small></div><Badge tone={i===2?'bad':'warn'}>{i===2?'Crítico':'Alto'}</Badge></div>)}</Card></div></>}
+function Planning() {
+  const [hours, setHours] = useState(60);
+  const occupancy = Math.round(((852 + hours) / 1040) * 100);
+  return (
+    <>
+      <PageHead
+        title="Simulação de cenários"
+        desc="Teste decisões antes de comprometer o planejamento real."
+      />
+      <div className="scenario">
+        <Card>
+          <div className="cardhead">
+            <div>
+              <h3>Configurar mudança</h3>
+              <p>Adicione uma demanda hipotética</p>
+            </div>
+          </div>
+          <label>
+            Título
+            <input defaultValue="Nova demanda estratégica" />
+          </label>
+          <div className="form2">
+            <label>
+              Tipo
+              <select>
+                <option>Estratégica</option>
+                <option>Emergencial</option>
+              </select>
+            </label>
+            <label>
+              Prioridade
+              <select>
+                <option>Alta</option>
+                <option>Crítica</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Esforço estimado <b>{hours}h</b>
+            <input
+              type="range"
+              min="10"
+              max="180"
+              value={hours}
+              onChange={(e) => setHours(+e.target.value)}
+            />
+          </label>
+          <button className="primary full">
+            <I.Play /> Recalcular cenário
+          </button>
+        </Card>
+        <Card className="impact">
+          <div className="cardhead">
+            <div>
+              <h3>Impacto projetado</h3>
+              <p>Comparação com o cenário atual</p>
+            </div>
+            <Badge tone={occupancy > 90 ? "bad" : "warn"}>
+              {occupancy > 90 ? "Alto impacto" : "Atenção"}
+            </Badge>
+          </div>
+          <div className="compare">
+            <div>
+              <span>CENÁRIO ATUAL</span>
+              <strong>82%</strong>
+              <small>852h comprometidas</small>
+            </div>
+            <I.ArrowRight />
+            <div>
+              <span>CENÁRIO SIMULADO</span>
+              <strong className={occupancy > 90 ? "bad" : ""}>
+                {occupancy}%
+              </strong>
+              <small>{852 + hours}h comprometidas</small>
+            </div>
+          </div>
+          <div className="alert bad">
+            <I.TriangleAlert />
+            <div>
+              <b>Capacidade próxima do limite</b>
+              <p>A mudança pode impactar 2 entregas do roadmap.</p>
+            </div>
+          </div>
+          <div className="impactrow">
+            <span>
+              <i className="dot bad" />
+              <b>Portal de autoatendimento</b>
+            </span>
+            <b>+5 dias</b>
+          </div>
+          <div className="impactrow">
+            <span>
+              <i className="dot warn" />
+              <b>Novo checkout omnichannel</b>
+            </span>
+            <b>+2 dias</b>
+          </div>
+          <button className="primary full">Aplicar ao planejamento</button>
+        </Card>
+      </div>
+    </>
+  );
+}
 
-function Changes(){return <><PageHead title="Mudanças do roadmap" desc="Rastreabilidade completa das decisões que alteraram o trimestre." action={<button className="primary"><I.Plus/> Registrar mudança</button>}/><Card>{[['Hoje, 14:32','DEV-154 adicionada ao trimestre','Vagner Moraes','+60h · impacto alto'],['Ontem, 16:10','Prioridade do checkout alterada','Marina Costa','Alta → Crítica'],['29 Ago, 10:24','Esforço do Portal revisado','Camila Souza','120h → 140h'],['27 Ago, 09:05','Otimização de busca concluída','Bruno Alves','Entrega antecipada']].map((x,i)=><div className="change"><div className={'changeicon i'+i}>{i===0?<I.Plus/>:i===1?<I.ArrowUp/>:i===2?<I.Clock/>:<I.Check/>}</div><div><small>{x[0]}</small><b>{x[1]}</b><span>por {x[2]}</span></div><Badge tone={i===0?'bad':i===3?'good':'gray'}>{x[3]}</Badge></div>)}</Card></>}
-function Reports(){return <><PageHead title="Relatórios" desc="Transforme dados do trimestre em decisões compartilháveis." action={<button className="primary"><I.Download/> Exportar relatório</button>}/><div className="reportgrid">{[['Evolução do roadmap','Progresso planejado versus realizado',I.TrendingUp],['Capacidade e utilização','Alocação por time, pessoa e período',I.Gauge],['Mudanças do trimestre','Inclusões, remoções e impacto acumulado',I.GitCompareArrows],['Riscos e previsibilidade','Exposição e tendência das entregas',I.ShieldCheck]].map(([a,b,Icon]:any)=><Card className="report"><span><Icon/></span><div><h3>{a}</h3><p>{b}</p></div><button className="icon"><I.ArrowUpRight/></button></Card>)}</div></>}
-function Settings(){return <><PageHead title="Configurações" desc="Personalize o workspace, times e regras de planejamento."/><Card><div className="settings"><div><h3>Preferências do planejamento</h3><p>Defina limites e comportamentos padrão.</p></div><label>Limite de ocupação recomendado <select><option>85%</option><option>90%</option></select></label><label>Reserva técnica mínima <select><option>10%</option><option>15%</option></select></label><label className="switchrow"><span><b>Alertas de capacidade</b><small>Notificar quando um time exceder o limite</small></span><input type="checkbox" defaultChecked/></label><button className="primary">Salvar alterações</button></div></Card></>}
+function Risks() {
+  return (
+    <>
+      <PageHead
+        title="Mapa de riscos"
+        desc="Antecipe ameaças e acompanhe os planos de mitigação."
+        action={
+          <button className="primary">
+            <I.Plus /> Novo risco
+          </button>
+        }
+      />
+      <div className="riskgrid">
+        <Card>
+          <div className="cardhead">
+            <div>
+              <h3>Matriz de probabilidade × impacto</h3>
+              <p>Clique em uma célula para filtrar</p>
+            </div>
+          </div>
+          <div className="matrix">
+            <span />
+            <b>Baixo</b>
+            <b>Médio</b>
+            <b>Alto</b>
+            <b>Crítico</b>
+            {["Alta", "Média", "Baixa"].map((r, ri) => (
+              <React.Fragment key={r}>
+                <b>{r}</b>
+                {[0, 1, 2, 3].map((_, ci) => (
+                  <div className={"cell c" + Math.min(3, ci + (2 - ri))}>
+                    {ri === 0 && ci === 2 ? (
+                      <i>2</i>
+                    ) : ri === 1 && ci === 3 ? (
+                      <i>1</i>
+                    ) : (
+                      ""
+                    )}
+                  </div>
+                ))}
+              </React.Fragment>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <div className="cardhead">
+            <div>
+              <h3>Riscos prioritários</h3>
+              <p>Ordenados por exposição</p>
+            </div>
+          </div>
+          {[
+            "Dependência da API antifraude",
+            "Capacidade de backend em setembro",
+            "Prazo regulatório inegociável",
+          ].map((x, i) => (
+            <div className="riskitem">
+              <span className={"risknum r" + i}>{i + 1}</span>
+              <div>
+                <b>{x}</b>
+                <small>
+                  {
+                    [
+                      "DEV-148 · Rafael Lima",
+                      "Time Backend · Marina Costa",
+                      "DEV-154 · Lucas Rocha",
+                    ][i]
+                  }
+                </small>
+              </div>
+              <Badge tone={i === 2 ? "bad" : "warn"}>
+                {i === 2 ? "Crítico" : "Alto"}
+              </Badge>
+            </div>
+          ))}
+        </Card>
+      </div>
+    </>
+  );
+}
 
-function App(){const [page,setPage]=useState<Page>('Visão geral');const [dark,setDark]=useState(false);const [collapsed,setCollapsed]=useState(false);const [cmd,setCmd]=useState(false);useEffect(()=>{const f=(e:KeyboardEvent)=>{if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();setCmd(true)}};addEventListener('keydown',f);return()=>removeEventListener('keydown',f)},[]);return <div className={dark?'app dark':'app'}><aside className={collapsed?'collapsed':''}><div className="brand"><span><I.Waypoints/></span><b>Road<span>map</span></b><button onClick={()=>setCollapsed(!collapsed)}><I.PanelLeftClose/></button></div><nav>{nav.map(([n,Icon])=><button title={n} className={page===n?'active':''} onClick={()=>setPage(n)}><Icon/><span>{n}</span>{n==='Riscos'&&<em>3</em>}</button>)}</nav><div className="sidefoot"><div className="workspace"><span>AX</span><div><b>Atlas Digital</b><small>Workspace enterprise</small></div><I.ChevronsUpDown/></div></div></aside><main><header><button className="mobile" onClick={()=>setCollapsed(!collapsed)}><I.Menu/></button><button className="topsearch" onClick={()=>setCmd(true)}><I.Search/><span>Buscar demandas, projetos, pessoas...</span><kbd>Ctrl K</kbd></button><div className="topactions"><button onClick={()=>setDark(!dark)}>{dark?<I.Sun/>:<I.Moon/>}</button><button className="bell"><I.Bell/><i/></button><div className="user"><span>VM</span><div><b>Vagner Moraes</b><small>Gestor de Produto</small></div><I.ChevronDown/></div></div></header><div className="content">{page==='Visão geral'?<Dashboard go={setPage}/>:page==='Roadmap'?<Roadmap/>:page==='Demandas'?<Demands/>:page==='Capacidade'?<Capacity/>:page==='Planejamento'?<Planning/>:page==='Riscos'?<Risks/>:page==='Mudanças'?<Changes/>:page==='Relatórios'?<Reports/>:<Settings/>}</div></main>{cmd&&<div className="overlay" onMouseDown={()=>setCmd(false)}><div className="command" onMouseDown={e=>e.stopPropagation()}><label><I.Search/><input autoFocus placeholder="O que você procura?"/></label><small>NAVEGAÇÃO</small>{nav.slice(0,6).map(([n,Icon])=><button onClick={()=>{setPage(n);setCmd(false)}}><Icon/>{n}<I.ArrowRight/></button>)}<footer><span>↑↓ para navegar</span><span>ESC para fechar</span></footer></div></div>}</div>}
-createRoot(document.getElementById('root')!).render(<DemandProvider><App/></DemandProvider>);
+function Changes() {
+  return (
+    <>
+      <PageHead
+        title="Mudanças do roadmap"
+        desc="Rastreabilidade completa das decisões que alteraram o trimestre."
+        action={
+          <button className="primary">
+            <I.Plus /> Registrar mudança
+          </button>
+        }
+      />
+      <Card>
+        {[
+          [
+            "Hoje, 14:32",
+            "DEV-154 adicionada ao trimestre",
+            "Vagner Moraes",
+            "+60h · impacto alto",
+          ],
+          [
+            "Ontem, 16:10",
+            "Prioridade do checkout alterada",
+            "Marina Costa",
+            "Alta → Crítica",
+          ],
+          [
+            "29 Ago, 10:24",
+            "Esforço do Portal revisado",
+            "Camila Souza",
+            "120h → 140h",
+          ],
+          [
+            "27 Ago, 09:05",
+            "Otimização de busca concluída",
+            "Bruno Alves",
+            "Entrega antecipada",
+          ],
+        ].map((x, i) => (
+          <div className="change">
+            <div className={"changeicon i" + i}>
+              {i === 0 ? (
+                <I.Plus />
+              ) : i === 1 ? (
+                <I.ArrowUp />
+              ) : i === 2 ? (
+                <I.Clock />
+              ) : (
+                <I.Check />
+              )}
+            </div>
+            <div>
+              <small>{x[0]}</small>
+              <b>{x[1]}</b>
+              <span>por {x[2]}</span>
+            </div>
+            <Badge tone={i === 0 ? "bad" : i === 3 ? "good" : "gray"}>
+              {x[3]}
+            </Badge>
+          </div>
+        ))}
+      </Card>
+    </>
+  );
+}
+function Reports() {
+  return (
+    <>
+      <PageHead
+        title="Relatórios"
+        desc="Transforme dados do trimestre em decisões compartilháveis."
+        action={
+          <button className="primary">
+            <I.Download /> Exportar relatório
+          </button>
+        }
+      />
+      <div className="reportgrid">
+        {[
+          [
+            "Evolução do roadmap",
+            "Progresso planejado versus realizado",
+            I.TrendingUp,
+          ],
+          [
+            "Capacidade e utilização",
+            "Alocação por time, pessoa e período",
+            I.Gauge,
+          ],
+          [
+            "Mudanças do trimestre",
+            "Inclusões, remoções e impacto acumulado",
+            I.GitCompareArrows,
+          ],
+          [
+            "Riscos e previsibilidade",
+            "Exposição e tendência das entregas",
+            I.ShieldCheck,
+          ],
+        ].map(([a, b, Icon]: any) => (
+          <Card className="report">
+            <span>
+              <Icon />
+            </span>
+            <div>
+              <h3>{a}</h3>
+              <p>{b}</p>
+            </div>
+            <button className="icon">
+              <I.ArrowUpRight />
+            </button>
+          </Card>
+        ))}
+      </div>
+    </>
+  );
+}
+function Settings() {
+  return (
+    <>
+      <PageHead
+        title="Configurações"
+        desc="Personalize o workspace, times e regras de planejamento."
+      />
+      <Card>
+        <div className="settings">
+          <div>
+            <h3>Preferências do planejamento</h3>
+            <p>Defina limites e comportamentos padrão.</p>
+          </div>
+          <label>
+            Limite de ocupação recomendado{" "}
+            <select>
+              <option>85%</option>
+              <option>90%</option>
+            </select>
+          </label>
+          <label>
+            Reserva técnica mínima{" "}
+            <select>
+              <option>10%</option>
+              <option>15%</option>
+            </select>
+          </label>
+          <label className="switchrow">
+            <span>
+              <b>Alertas de capacidade</b>
+              <small>Notificar quando um time exceder o limite</small>
+            </span>
+            <input type="checkbox" defaultChecked />
+          </label>
+          <button className="primary">Salvar alterações</button>
+        </div>
+      </Card>
+    </>
+  );
+}
+
+function App() {
+  const [page, setPage] = useState<Page>("Visão geral");
+  const [dark, setDark] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [cmd, setCmd] = useState(false);
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setCmd(true);
+      }
+    };
+    addEventListener("keydown", f);
+    return () => removeEventListener("keydown", f);
+  }, []);
+  return (
+    <div className={dark ? "app dark" : "app"}>
+      <aside className={collapsed ? "collapsed" : ""}>
+        <div className="brand">
+          <span>
+            <I.Waypoints />
+          </span>
+          <b>
+            Road<span>map</span>
+          </b>
+          <button onClick={() => setCollapsed(!collapsed)}>
+            <I.PanelLeftClose />
+          </button>
+        </div>
+        <nav>
+          {nav.map(([n, Icon]) => (
+            <button
+              title={n}
+              className={page === n ? "active" : ""}
+              onClick={() => setPage(n)}
+            >
+              <Icon />
+              <span>{n}</span>
+              {n === "Riscos" && <em>3</em>}
+            </button>
+          ))}
+        </nav>
+        <div className="sidefoot">
+          <div className="workspace">
+            <span>AX</span>
+            <div>
+              <b>Atlas Digital</b>
+              <small>Workspace enterprise</small>
+            </div>
+            <I.ChevronsUpDown />
+          </div>
+        </div>
+      </aside>
+      <main>
+        <header>
+          <button className="mobile" onClick={() => setCollapsed(!collapsed)}>
+            <I.Menu />
+          </button>
+          <button className="topsearch" onClick={() => setCmd(true)}>
+            <I.Search />
+            <span>Buscar demandas, projetos, pessoas...</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+          <div className="topactions">
+            <button onClick={() => setDark(!dark)}>
+              {dark ? <I.Sun /> : <I.Moon />}
+            </button>
+            <button className="bell">
+              <I.Bell />
+              <i />
+            </button>
+            <div className="user">
+              <span>VM</span>
+              <div>
+                <b>Vagner Moraes</b>
+                <small>Gestor de Produto</small>
+              </div>
+              <I.ChevronDown />
+            </div>
+          </div>
+        </header>
+        <div className="content">
+          {page === "Visão geral" ? (
+            <Dashboard go={setPage} />
+          ) : page === "Roadmap" ? (
+            <Roadmap />
+          ) : page === "Demandas" ? (
+            <Demands />
+          ) : page === "Capacidade" ? (
+            <Capacity />
+          ) : page === "Planejamento" ? (
+            <Planning />
+          ) : page === "Riscos" ? (
+            <Risks />
+          ) : page === "Mudanças" ? (
+            <Changes />
+          ) : page === "Relatórios" ? (
+            <Reports />
+          ) : (
+            <Settings />
+          )}
+        </div>
+      </main>
+      {cmd && (
+        <div className="overlay" onMouseDown={() => setCmd(false)}>
+          <div className="command" onMouseDown={(e) => e.stopPropagation()}>
+            <label>
+              <I.Search />
+              <input autoFocus placeholder="O que você procura?" />
+            </label>
+            <small>NAVEGAÇÃO</small>
+            {nav.slice(0, 6).map(([n, Icon]) => (
+              <button
+                onClick={() => {
+                  setPage(n);
+                  setCmd(false);
+                }}
+              >
+                <Icon />
+                {n}
+                <I.ArrowRight />
+              </button>
+            ))}
+            <footer>
+              <span>↑↓ para navegar</span>
+              <span>ESC para fechar</span>
+            </footer>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+createRoot(document.getElementById("root")!).render(
+  <TeamProvider>
+    <DemandProvider>
+      <App />
+    </DemandProvider>
+  </TeamProvider>,
+);
