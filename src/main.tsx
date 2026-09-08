@@ -48,6 +48,7 @@ type Demand = {
   type?: string;
   version?: string;
   notes?: string;
+  startDate?: string;
 };
 type Product = {
   id: number;
@@ -324,11 +325,21 @@ function ChartTip({ active, payload, label }: any) {
 }
 
 function Dashboard({ go }: { go: (p: Page) => void }) {
+  const { rows, roadmap } = useDemands();
+  const { products } = useProducts();
+  const [productFilter, setProductFilter] = useState("Todos");
+  const scoped = productFilter === "Todos" ? rows : rows.filter((d) => d.product === productFilter);
+  const scopedIds = new Set(scoped.map((d) => d.id));
+  const planned = roadmap.filter((item) => scopedIds.has(item.demandId));
+  const effort = scoped.reduce((sum, demand) => sum + demand.effort, 0);
+  const completed = scoped.filter((d) => d.status === "Concluída").length;
+  const critical = scoped.filter((d) => d.risk === "Crítico" || d.risk === "Alto").length;
+  const progress = scoped.length ? Math.round(scoped.reduce((sum, d) => sum + d.progress, 0) / scoped.length) : 0;
   const kpis = [
-    ["Capacidade comprometida", "82%", "+4,2%", "warn", I.Gauge],
-    ["Roadmap planejado", "18", "3 concluídas", "blue", I.Map],
-    ["Previsibilidade", "78%", "+6,4%", "good", I.Crosshair],
-    ["Riscos críticos", "3", "1 novo", "bad", I.ShieldAlert],
+    ["Capacidade estimada", `${effort}h`, `${scoped.length} demandas`, "warn", I.Gauge],
+    ["Roadmap planejado", String(planned.length), `${completed} concluídas`, "blue", I.Map],
+    ["Progresso médio", `${progress}%`, "no escopo atual", "good", I.Crosshair],
+    ["Riscos altos/críticos", String(critical), productFilter === "Todos" ? "visão geral" : productFilter, "bad", I.ShieldAlert],
   ];
   return (
     <>
@@ -341,6 +352,7 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
           </button>
         }
       />
+      <div className="dashboard-filter"><div><I.Filter/><span><b>Escopo dos indicadores</b><small>Visualize o consolidado ou um produto específico</small></span></div><select value={productFilter} onChange={(e) => setProductFilter(e.target.value)}><option>Todos</option>{products.filter((p)=>p.active).map((p)=><option key={p.id} value={p.name}>{p.name}</option>)}</select></div>
       <div className="insight">
         <span>
           <I.Sparkles />
@@ -348,8 +360,7 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
         <div>
           <b>Insight do planejamento</b>
           <p>
-            A entrada da DEV-154 eleva a ocupação de setembro para 94% e pode
-            deslocar o Portal de autoatendimento em 5 dias.
+            {productFilter === "Todos" ? `O portfólio possui ${planned.length} demandas planejadas e ${critical} riscos que exigem atenção.` : `${productFilter} possui ${scoped.length} demandas, ${effort}h estimadas e progresso médio de ${progress}%.`}
           </p>
         </div>
         <button onClick={() => go("Mudanças")}>
@@ -646,13 +657,15 @@ const quarters = [
 function Roadmap() {
   const { rows, roadmap, setRoadmap } = useDemands();
   const { team } = useTeam();
+  const { products } = useProducts();
   const [view, setView] = useState("Timeline");
   const [quarter, setQuarter] = useState("Q3 2026");
+  const [productFilter, setProductFilter] = useState("Todos");
   const [picker, setPicker] = useState(false);
   const [staffFor, setStaffFor] = useState<RoadmapEntry | null>(null);
   const items = roadmap.flatMap((entry) => {
     const demand = rows.find((d) => d.id === entry.demandId);
-    return entry.quarter === quarter && demand ? [{ demand, entry }] : [];
+    return entry.quarter === quarter && demand && (productFilter === "Todos" || demand.product === productFilter) ? [{ demand, entry }] : [];
   });
   const available = rows.filter(
     (d) => !roadmap.some((r) => r.demandId === d.id),
@@ -717,6 +730,13 @@ function Roadmap() {
             </button>
           ))}
         </div>
+        <label className="quarter-select">
+          <I.Boxes />
+          <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)}>
+            <option>Todos</option>
+            {products.filter((product) => product.active).map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
+          </select>
+        </label>
         <label className="quarter-select">
           <I.CalendarRange />
           <select value={quarter} onChange={(e) => setQuarter(e.target.value)}>
@@ -1017,6 +1037,7 @@ const emptyDemandForm = {
   requester: "",
   priority: "Média",
   due: "",
+  startDate: "",
   effort: "40",
   owner: "",
   dependencies: "",
@@ -1085,6 +1106,7 @@ function Demands() {
         parts.length === 2
           ? `2026-${month[parts[1]] || "09"}-${parts[0].padStart(2, "0")}`
           : "",
+      startDate: d.startDate || "",
     });
     setModal(true);
   };
@@ -1116,6 +1138,7 @@ function Demands() {
       type: form.type,
       version: form.version,
       notes: form.description,
+      startDate: form.startDate,
     };
     setRows(
       editing
@@ -1262,7 +1285,7 @@ function Demands() {
               <div className="form-field team-readonly"><label>Time responsável <I.Lock/></label><div><I.UsersRound/><span><b>{selectedProduct?.team || "Selecione um produto"}</b><small>{selectedProduct ? `Coordenador: ${selectedProduct.coordinator}` : "Preenchido automaticamente"}</small></span></div></div>
               <div className="form-field">
                 <label>
-                  Tipo <em>*</em>
+                  Categoria <em>*</em>
                 </label>
                 <select name="type" value={form.type} onChange={change}>
                   <option>Estratégica</option>
@@ -1310,6 +1333,10 @@ function Demands() {
                   <option>Alta</option>
                   <option>Crítica</option>
                 </select>
+              </div>
+              <div className="form-field">
+                <label htmlFor="startDate">Data de início</label>
+                <input id="startDate" type="date" name="startDate" value={form.startDate} onChange={change}/>
               </div>
               <div className="form-field">
                 <label htmlFor="due">
