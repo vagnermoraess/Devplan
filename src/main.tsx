@@ -22,6 +22,7 @@ import {
   YAxis,
 } from "recharts";
 import "./styles.css";
+import "./dashboard.css";
 
 type Page =
   | "Visão geral"
@@ -339,15 +340,19 @@ function ChartTip({ active, payload, label }: any) {
 function Dashboard({ go }: { go: (p: Page) => void }) {
   const { rows, roadmap } = useDemands();
   const { products } = useProducts();
+  const { team } = useTeam();
   const [productFilter, setProductFilter] = useState("Todos");
   const scoped = productFilter === "Todos" ? rows : rows.filter((d) => d.product === productFilter);
   const scopedIds = new Set(scoped.map((d) => d.id));
   const planned = roadmap.filter((item) => scopedIds.has(item.demandId));
   const effort = scoped.reduce((sum, demand) => sum + demand.effort, 0);
+  const scopedTeam = productFilter === "Todos" ? team : team.filter((person) => person.product === productFilter);
+  const totalCapacity = scopedTeam.reduce((sum, person) => sum + person.total, 0);
   const completed = scoped.filter((d) => d.status === "Concluída").length;
   const critical = scoped.filter((d) => d.risk === "Crítico" || d.risk === "Alto").length;
   const progress = scoped.length ? Math.round(scoped.reduce((sum, d) => sum + d.progress, 0) / scoped.length) : 0;
   const kpis = [
+    ["Capacidade total", `${totalCapacity}h`, `${scopedTeam.length} colaboradores`, "blue", I.Users],
     ["Capacidade estimada", `${effort}h`, `${scoped.length} demandas`, "warn", I.Gauge],
     ["Roadmap planejado", String(planned.length), `${completed} concluídas`, "blue", I.Map],
     ["Progresso médio", `${progress}%`, "no escopo atual", "good", I.Crosshair],
@@ -365,21 +370,7 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
         }
       />
       <div className="dashboard-filter"><div><I.Filter/><span><b>Escopo dos indicadores</b><small>Visualize o consolidado ou um produto específico</small></span></div><select value={productFilter} onChange={(e) => setProductFilter(e.target.value)}><option>Todos</option>{products.filter((p)=>p.active).map((p)=><option key={p.id} value={p.name}>{p.name}</option>)}</select></div>
-      <div className="insight">
-        <span>
-          <I.Sparkles />
-        </span>
-        <div>
-          <b>Insight do planejamento</b>
-          <p>
-            {productFilter === "Todos" ? `O portfólio possui ${planned.length} demandas planejadas e ${critical} riscos que exigem atenção.` : `${productFilter} possui ${scoped.length} demandas, ${effort}h estimadas e progresso médio de ${progress}%.`}
-          </p>
-        </div>
-        <button onClick={() => go("Mudanças")}>
-          Revisar impacto <I.ArrowRight />
-        </button>
-      </div>
-      <div className="kpis">
+      <div className="kpis dashboard-kpis">
         {kpis.map(([n, v, d, t, Icon]: any) => (
           <Card key={n} className="kpi">
             <div className={"kicon " + t}>
