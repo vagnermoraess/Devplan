@@ -3,9 +3,11 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { createRoot } from "react-dom/client";
+import ExcelJS from "exceljs";
 import * as I from "lucide-react";
 import {
   Area,
@@ -1052,6 +1054,7 @@ const emptyDemandForm = {
   origin: "Produto",
   requester: "",
   priority: "Média",
+  status: "Backlog",
   due: "",
   startDate: "",
   effort: "40",
@@ -1072,6 +1075,9 @@ function Demands() {
   const [removing, setRemoving] = useState<Demand | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState(emptyDemandForm);
+  const fileRef=useRef<HTMLInputElement>(null);
+  const [importing,setImporting]=useState(false);
+  const [importFeedback,setImportFeedback]=useState("");
   const selectedProduct = products.find((product) => product.name === form.product);
   const availableResources = team.filter((person) => person.product === form.product);
   const filtered = rows.filter((d) =>
@@ -1082,6 +1088,7 @@ function Demands() {
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >,
   ) => setForm(e.target.name === "product" ? { ...form, product: e.target.value, resourceIds: [] } : { ...form, [e.target.name]: e.target.value });
+  const importExcel=async(e:React.ChangeEvent<HTMLInputElement>)=>{const file=e.target.files?.[0];if(!file)return;setImporting(true);setImportFeedback("");try{const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await file.arrayBuffer());const sheet=workbook.worksheets[0];if(!sheet)throw new Error("Planilha sem conteúdo");const headers:Record<number,string>={};sheet.getRow(1).eachCell((cell,col)=>{headers[col]=String(cell.text).trim().toLowerCase()});const imported:Demand[]=[];let ignored=0;const text=(row:ExcelJS.Row,names:string[])=>{const col=Object.entries(headers).find(([,header])=>names.includes(header))?.[0];return col?row.getCell(Number(col)).text.trim():""};const iso=(value:string)=>{if(!value)return "";const match=value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);return match?`${match[3]}-${match[2].padStart(2,"0")}-${match[1].padStart(2,"0")}`: /^\d{4}-\d{2}-\d{2}$/.test(value)?value:""};const nextId=Math.max(...rows.map((d)=>Number(d.id.replace(/\D/g,""))||0),159)+1;sheet.eachRow((row,rowNumber)=>{if(rowNumber===1)return;const name=text(row,["demanda","título","titulo"]);const productText=text(row,["produto"]);const product=products.find((p)=>p.name.toLowerCase()===productText.toLowerCase()&&p.active);if(!name||!product){ignored++;return}const dueDate=iso(text(row,["prazo","prazo desejado","data fim","data de fim"]));const effort=Number(text(row,["capacidade estimada","esforço","esforco","horas"]).replace(",","."))||0;imported.push({id:`DEV-${nextId+imported.length}`,name,product:product.name,owner:product.coordinator.split(" ")[0],status:text(row,["status"])||"Backlog",priority:text(row,["prioridade"])||"Média",effort,progress:0,due:dueDate?new Date(dueDate+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".",""):"Sem prazo",dueDate,startDate:iso(text(row,["data de início","data de inicio","início","inicio"])),risk:"Médio",type:text(row,["categoria","tipo"])||"Evolutiva",version:text(row,["versão","versao"]),notes:text(row,["observações","observacoes"]),resourceIds:[]})});if(imported.length)setRows((current)=>[...imported,...current]);setImportFeedback(`${imported.length} demanda(s) importada(s)${ignored?` · ${ignored} linha(s) ignorada(s)`:""}.`)}catch{setImportFeedback("Não foi possível ler a planilha. Verifique o formato e os cabeçalhos.")}finally{setImporting(false);e.target.value=""}};
   const close = () => {
     setModal(false);
     setEditing(null);
@@ -1115,6 +1122,7 @@ function Demands() {
       name: d.name,
       product: d.product,
       priority: d.priority,
+      status: d.status,
       type: d.type || "Evolutiva",
       version: d.version || "",
       description: d.notes || "",
@@ -1146,7 +1154,7 @@ function Demands() {
       name: form.name.trim(),
       product: form.product,
       owner: selectedProduct?.coordinator.split(" ")[0] || "Time",
-      status: editing?.status || "Backlog",
+      status: form.status,
       priority: form.priority,
       effort: Number(form.effort),
       progress: editing?.progress || 0,
@@ -1196,10 +1204,12 @@ function Demands() {
         <button>
           <I.Filter /> Filtros <Badge>3</Badge>
         </button>
-        <button>
-          <I.Download /> Exportar
+        <button onClick={()=>fileRef.current?.click()} disabled={importing}>
+          {importing?<I.LoaderCircle className="spin"/>:<I.FileSpreadsheet/>} {importing?"Importando...":"Importar Excel"}
         </button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={importExcel}/>
       </div>
+      {importFeedback&&<div className="import-feedback"><I.CircleCheck/><span>{importFeedback}</span><button onClick={()=>setImportFeedback("")}><I.X/></button></div>}
       <Card>
         <div className="cardhead">
           <div>
@@ -1354,6 +1364,7 @@ function Demands() {
                   <option>Crítica</option>
                 </select>
               </div>
+              <div className="form-field"><label>Status</label><select name="status" value={form.status} onChange={change}><option>Backlog</option><option>Planejada</option><option>Em análise</option><option>Desenvolvimento</option><option>Em testes</option><option>Homologação</option><option>Concluída</option><option>Cancelada</option><option>Bloqueada</option></select></div>
               <div className="form-field">
                 <label htmlFor="startDate">Data de início</label>
                 <input id="startDate" type="date" name="startDate" value={form.startDate} onChange={change}/>
