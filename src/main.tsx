@@ -1917,12 +1917,18 @@ function Capacity() {
   const [removing, setRemoving] = useState<Staff | null>(null);
   const [modal, setModal] = useState(false);
   const [error, setError] = useState("");
+  const fileRef=useRef<HTMLInputElement>(null);
+  const [importing,setImporting]=useState(false);
+  const [importFeedback,setImportFeedback]=useState("");
+  const demandAllocations=(person:Staff)=>rows.flatMap((demand)=>{const plan=roadmap.find((item)=>item.demandId===demand.id);const explicit=plan?.allocations.find((item)=>item.staffId===person.id);const linked=demand.resourceIds?.includes(person.id);if(!explicit&&!linked)return [];const linkedCount=Math.max(1,demand.resourceIds?.length||1);return [{demand,plan:plan||{demandId:demand.id,quarter:"Planejamento",collaborators:[],allocations:[]},hours:explicit?.hours||Math.round(demand.effort/linkedCount)}]});
+  const effectiveUsed=(person:Staff)=>person.used+demandAllocations(person).reduce((sum,item)=>sum+item.hours,0);
   const filteredTeam=productFilter==="Todos"?team:team.filter((person)=>person.product===productFilter);
   const total = filteredTeam.reduce((sum, m) => sum + m.total, 0);
-  const used = filteredTeam.reduce((sum, m) => sum + m.used, 0);
+  const used = filteredTeam.reduce((sum, m) => sum + effectiveUsed(m), 0);
   const free = total - used;
-  const overloaded = filteredTeam.filter((m) => m.used / m.total > 0.9).length;
-  const allocatedDemands=allocationFor?roadmap.flatMap((plan)=>{const allocation=plan.allocations.find((item)=>item.staffId===allocationFor.id);const demand=rows.find((item)=>item.id===plan.demandId);return allocation&&demand?[{demand,plan,hours:allocation.hours}]:[]}):[];
+  const overloaded = filteredTeam.filter((m) => effectiveUsed(m) / m.total > 0.9).length;
+  const allocatedDemands=allocationFor?demandAllocations(allocationFor):[];
+  const importCapacity=async(e:React.ChangeEvent<HTMLInputElement>)=>{const file=e.target.files?.[0];if(!file)return;setImporting(true);setImportFeedback("");try{const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await file.arrayBuffer());const sheet=workbook.worksheets[0];if(!sheet)throw new Error();const headers:Record<number,string>={};sheet.getRow(1).eachCell((cell,col)=>headers[col]=cell.text.trim().toLowerCase());const get=(row:ExcelJS.Row,names:string[])=>{const col=Object.entries(headers).find(([,header])=>names.includes(header))?.[0];return col?row.getCell(Number(col)).text.trim():""};const incoming:Staff[]=[];let ignored=0;sheet.eachRow((row,index)=>{if(index===1)return;const name=get(row,["colaborador","nome","nome completo"]);const productText=get(row,["produto"]);const product=products.find((item)=>item.name.toLowerCase()===productText.toLowerCase()&&item.active);const total=Number(get(row,["capacidade","capacidade total","horas disponíveis","horas disponiveis"]).replace(",","."));if(!name||!product||!total){ignored++;return}incoming.push({id:Date.now()+index,name,role:get(row,["função","funcao","cargo"])||"Desenvolvedor",product:product.name,total,used:Number(get(row,["horas alocadas","alocada","alocação","alocacao"]).replace(",","."))||0})});setTeam((current)=>{const next=[...current];incoming.forEach((person)=>{const found=next.findIndex((item)=>item.name.toLowerCase()===person.name.toLowerCase());if(found>=0)next[found]={...person,id:next[found].id};else next.push(person)});return next});setImportFeedback(`${incoming.length} capacidade(s) importada(s)${ignored?` · ${ignored} linha(s) ignorada(s)`:""}.`)}catch{setImportFeedback("Não foi possível ler a planilha de capacidade.")}finally{setImporting(false);e.target.value=""}};
   const openNew = () => {
     setEditing(null);
     setForm(emptyStaff);
@@ -1986,12 +1992,9 @@ function Capacity() {
       <PageHead
         title="Capacidade do time"
         desc="Visualize alocação, disponibilidade e pontos de sobrecarga."
-        action={
-          <button className="primary" onClick={openNew}>
-            <I.UserPlus /> Novo colaborador
-          </button>
-        }
+        action={<div className="capacity-actions"><button className="ghost" onClick={()=>fileRef.current?.click()} disabled={importing}>{importing?<I.LoaderCircle className="spin"/>:<I.FileSpreadsheet/>}{importing?"Importando...":"Importar Excel"}</button><input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={importCapacity}/><button className="primary" onClick={openNew}><I.UserPlus /> Novo colaborador</button></div>}
       />
+      {importFeedback&&<div className="import-feedback"><I.CircleCheck/><span>{importFeedback}</span><button onClick={()=>setImportFeedback("")}><I.X/></button></div>}
       <div className="capacity-filter"><div><I.Boxes/><span><b>Capacidade por produto</b><small>Filtre os indicadores e colaboradores</small></span></div><select value={productFilter} onChange={(e)=>setProductFilter(e.target.value)}><option>Todos</option>{products.filter((product)=>product.active).map((product)=><option key={product.id} value={product.name}>{product.name}</option>)}</select></div>
       <div className="kpis compact">
         <Card>
@@ -2031,7 +2034,8 @@ function Capacity() {
         </div>
         <div className="people">
           {filteredTeam.map((m) => {
-            const pct = Math.round((m.used / m.total) * 100);
+            const allocated=effectiveUsed(m);
+            const pct = Math.round((allocated / m.total) * 100);
             return (
               <div className="member member-managed" key={m.id}>
                 <span className="avatar">
@@ -2055,12 +2059,12 @@ function Capacity() {
                     />
                   </div>
                   <small>
-                    {m.used}h de {m.total}h
+                    {allocated}h de {m.total}h
                   </small>
                 </div>
                 <b className={pct > 90 ? "bad" : ""}>{pct}%</b>
-                <span className={m.total - m.used < 0 ? "bad" : ""}>
-                  {m.total - m.used}h livres
+                <span className={m.total - allocated < 0 ? "bad" : ""}>
+                  {m.total - allocated}h livres
                 </span>
                 <div className="row-actions">
                   <button
