@@ -36,7 +36,8 @@ type Page =
   | "Riscos"
   | "Mudanças"
   | "Relatórios"
-  | "Configurações";
+  | "Configurações"
+  | "Usuários";
 type Demand = {
   id: string;
   name: string;
@@ -264,6 +265,7 @@ const nav: [Page, any][] = [
   ["Mudanças", I.GitCompareArrows],
   ["Relatórios", I.BarChart3],
   ["Configurações", I.Settings],
+  ["Usuários", I.UserCog],
 ];
 const cap = [
   { m: "Jul", roadmap: 220, sustentacao: 42, novas: 18, reserva: 28 },
@@ -1063,10 +1065,11 @@ const emptyDemandForm = {
   justification: "",
   impact: "",
   resourceIds: [] as number[],
+  planningQuarter: "Planejamento",
 };
 function Demands() {
   const [q, setQ] = useState("");
-  const { rows, setRows } = useDemands();
+  const { rows, setRows, setRoadmap, setHistory } = useDemands();
   const { products } = useProducts();
   const { team } = useTeam();
   const [modal, setModal] = useState(false);
@@ -1172,6 +1175,10 @@ function Demands() {
         ? rows.map((row) => (row.id === editing.id ? data : row))
         : [data, ...rows],
     );
+    if(!editing && form.planningQuarter!=="Planejamento"){
+      setRoadmap((current)=>[...current,{demandId:data.id,quarter:form.planningQuarter,collaborators:[],allocations:[]}]);
+      setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR"),title:"Demanda planejada no cadastro",actor:"Vagner Moraes",detail:`${data.id} incluída em ${form.planningQuarter}`,tone:"good"},...current]);
+    }
     close();
     setSaved(true);
     setTimeout(() => setSaved(false), 3500);
@@ -1365,6 +1372,7 @@ function Demands() {
                 </select>
               </div>
               <div className="form-field"><label>Status</label><select name="status" value={form.status} onChange={change}><option>Backlog</option><option>Planejada</option><option>Em análise</option><option>Desenvolvimento</option><option>Em testes</option><option>Homologação</option><option>Concluída</option><option>Cancelada</option><option>Bloqueada</option></select></div>
+              {!editing&&<div className="form-field"><label>Planejamento inicial</label><select name="planningQuarter" value={form.planningQuarter} onChange={change}><option value="Planejamento">Deixar em planejamento</option>{quarters.map((quarter)=><option key={quarter}>{quarter}</option>)}</select><small className="resource-help">O quarter pertence ao planejamento, não à demanda.</small></div>}
               <div className="form-field">
                 <label htmlFor="startDate">Data de início</label>
                 <input id="startDate" type="date" name="startDate" value={form.startDate} onChange={change}/>
@@ -2550,11 +2558,17 @@ function Settings() {
   );
 }
 
+type AccessRole="Administrador"|"Editor"|"Visualização";
+function UsersAdmin(){const [users,setUsers]=useState([{id:1,name:"Vagner Moraes",email:"vagner@atlas.com",role:"Administrador" as AccessRole},{id:2,name:"Marina Costa",email:"marina@atlas.com",role:"Editor" as AccessRole},{id:3,name:"Bianca Melo",email:"bianca@atlas.com",role:"Visualização" as AccessRole}]);return <><PageHead title="Administração de usuários" desc="Gerencie os níveis de acesso ao portal." action={<button className="primary"><I.UserPlus/> Novo usuário</button>}/><Card><div className="tablewrap"><table><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Permissões</th></tr></thead><tbody>{users.map((user)=><tr key={user.id}><td><span className="person">{user.name[0]}</span><b>{user.name}</b></td><td>{user.email}</td><td><select className="quarter-inline" value={user.role} onChange={(e)=>setUsers(users.map((item)=>item.id===user.id?{...item,role:e.target.value as AccessRole}:item))}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></td><td>{user.role==="Administrador"?"Acesso total":user.role==="Editor"?"Demandas, produtos, capacidade e roadmap":"Somente demandas e roadmap"}</td></tr>)}</tbody></table></div></Card></>}
+
 function App() {
   const [page, setPage] = useState<Page>("Visão geral");
   const [dark, setDark] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [cmd, setCmd] = useState(false);
+  const [role,setRole]=useState<AccessRole>("Administrador");
+  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Produtos","Capacidade"].includes(name):["Demandas","Roadmap"].includes(name));
+  useEffect(()=>{if(!allowedNav.some(([name])=>name===page))setPage(role==="Visualização"?"Demandas":"Visão geral")},[role]);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -2566,7 +2580,7 @@ function App() {
     return () => removeEventListener("keydown", f);
   }, []);
   return (
-    <div className={dark ? "app dark" : "app"}>
+    <div className={`${dark ? "app dark" : "app"} ${role === "Visualização" ? "role-viewer" : role === "Editor" ? "role-editor" : "role-admin"}`}>
       <aside className={collapsed ? "collapsed" : ""}>
         <div className="brand">
           <span>
@@ -2580,7 +2594,7 @@ function App() {
           </button>
         </div>
         <nav>
-          {nav.map(([n, Icon]) => (
+          {allowedNav.map(([n, Icon]) => (
             <button
               title={n}
               className={page === n ? "active" : ""}
@@ -2625,7 +2639,7 @@ function App() {
               <span>VM</span>
               <div>
                 <b>Vagner Moraes</b>
-                <small>Gestor de Produto</small>
+                <select className="role-switch" value={role} onChange={(e)=>setRole(e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select>
               </div>
               <I.ChevronDown />
             </div>
@@ -2650,6 +2664,8 @@ function App() {
             <Changes />
           ) : page === "Relatórios" ? (
             <Reports />
+          ) : page === "Usuários" ? (
+            <UsersAdmin />
           ) : (
             <Settings />
           )}
