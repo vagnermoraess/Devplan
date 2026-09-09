@@ -29,6 +29,30 @@ import "./capacity.css";
 import "./changes.css";
 import "./demands.css";
 
+function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved !== null) return JSON.parse(saved) as T;
+    } catch {
+      // Mantém os dados iniciais caso o armazenamento esteja indisponível/corrompido.
+    }
+    return typeof initialValue === "function"
+      ? (initialValue as () => T)()
+      : initialValue;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // A aplicação continua funcional mesmo sem acesso ao armazenamento local.
+    }
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+
 type Page =
   | "Visão geral"
   | "Roadmap"
@@ -121,7 +145,7 @@ const ProductContext = createContext<{
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
 } | null>(null);
 function ProductProvider({ children }: { children: React.ReactNode }) {
-  const [products, setProducts] = useState(initialProducts);
+  const [products, setProducts] = usePersistentState<Product[]>("dev-plan:products", initialProducts);
   return (
     <ProductContext.Provider value={{ products, setProducts }}>
       {children}
@@ -228,16 +252,17 @@ const DemandContext = createContext<{
   setHistory: React.Dispatch<React.SetStateAction<ChangeLog[]>>;
 } | null>(null);
 function DemandProvider({ children }: { children: React.ReactNode }) {
-  const [rows, setRows] = useState<Demand[]>(demands);
-  const [roadmap, setRoadmap] = useState<RoadmapEntry[]>(
-    demands.slice(0, 5).map((d) => ({
+  const [rows, setRows] = usePersistentState<Demand[]>("dev-plan:demands", demands);
+  const [roadmap, setRoadmap] = usePersistentState<RoadmapEntry[]>(
+    "dev-plan:roadmap",
+    () => demands.slice(0, 5).map((d) => ({
       demandId: d.id,
       quarter: "Q3 2026",
       collaborators: [d.owner],
       allocations: [{ staffId: Math.max(1, members.findIndex(([name]) => String(name).startsWith(d.owner)) + 1), hours: d.effort }],
     })),
   );
-  const [history,setHistory]=useState<ChangeLog[]>([]);
+  const [history,setHistory]=usePersistentState<ChangeLog[]>("dev-plan:history", []);
   return (
     <DemandContext.Provider value={{ rows, setRows, roadmap, setRoadmap, history, setHistory }}>
       {children}
@@ -1194,7 +1219,19 @@ function Demands() {
   };
   const confirmRemove = () => {
     if (!removing) return;
-    setRows(rows.filter((row) => row.id !== removing.id));
+    const removed = removing;
+    setRows((current) => current.filter((row) => row.id !== removed.id));
+    setRoadmap((current) => current.filter((item) => item.demandId !== removed.id));
+    setHistory((current) => [{
+      id: Date.now(),
+      date: new Date().toLocaleString("pt-BR"),
+      title: "Demanda excluída",
+      actor: "Vagner Moraes",
+      detail: `${removed.id} removida da gestão de demandas e do Roadmap`,
+      tone: "bad",
+      product: removed.product,
+      quarter: roadmap.find((item) => item.demandId === removed.id)?.quarter,
+    }, ...current]);
     setRemoving(null);
   };
   return (
@@ -1887,7 +1924,7 @@ const TeamContext = createContext<{
   setTeam: React.Dispatch<React.SetStateAction<Staff[]>>;
 } | null>(null);
 function TeamProvider({ children }: { children: React.ReactNode }) {
-  const [team, setTeam] = useState<Staff[]>(initialStaff);
+  const [team, setTeam] = usePersistentState<Staff[]>("dev-plan:team", initialStaff);
   return (
     <TeamContext.Provider value={{ team, setTeam }}>
       {children}
@@ -1909,7 +1946,7 @@ const emptyStaff = {
 function Capacity() {
   const { team, setTeam } = useTeam();
   const { products } = useProducts();
-  const { rows, roadmap } = useDemands();
+  const { rows, setRows, roadmap, setRoadmap } = useDemands();
   const [productFilter,setProductFilter]=useState("Todos");
   const [allocationFor,setAllocationFor]=useState<Staff|null>(null);
   const [form, setForm] = useState(emptyStaff);
@@ -1984,7 +2021,18 @@ function Capacity() {
     close();
   };
   const confirmRemove = () => {
-    if (removing) setTeam(team.filter((m) => m.id !== removing.id));
+    if (removing) {
+      const staffId = removing.id;
+      setTeam((current) => current.filter((m) => m.id !== staffId));
+      setRows((current) => current.map((demand) => ({
+        ...demand,
+        resourceIds: demand.resourceIds?.filter((id) => id !== staffId),
+      })));
+      setRoadmap((current) => current.map((item) => ({
+        ...item,
+        allocations: item.allocations.filter((allocation) => allocation.staffId !== staffId),
+      })));
+    }
     setRemoving(null);
   };
   return (
