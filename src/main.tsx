@@ -390,14 +390,14 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
     return total + (explicit?.hours ?? calculated);
   }, 0);
   const allocatedCapacity = scopedTeam.reduce(
-    (sum, person) => sum + person.used + demandHoursFor(person.id),
+    (sum, person) => sum + demandHoursFor(person.id),
     0,
   );
   const roadmapCapacity = scopedTeam.reduce((sum, person) => sum + demandHoursFor(person.id), 0);
-  const baseCapacity = scopedTeam.reduce((sum, person) => sum + person.used, 0);
+  const baseCapacity = 0;
   const availableCapacity = Math.max(0, totalCapacity - allocatedCapacity);
   const utilization = totalCapacity ? Math.round((allocatedCapacity / totalCapacity) * 100) : 0;
-  const capacityByProduct=products.filter((product)=>product.active&&(productFilter==="Todos"||product.name===productFilter)).map((product)=>{const people=team.filter((person)=>person.product===product.name);const total=people.reduce((sum,person)=>sum+person.total,0);const allocated=people.reduce((sum,person)=>sum+person.used+demandHoursFor(person.id),0);return {product:product.name,total,allocated,available:total-allocated,utilization:total?Math.round(allocated/total*100):0}});
+  const capacityByProduct=products.filter((product)=>product.active&&(productFilter==="Todos"||product.name===productFilter)).map((product)=>{const people=team.filter((person)=>person.product===product.name);const total=people.reduce((sum,person)=>sum+person.total,0);const allocated=people.reduce((sum,person)=>sum+demandHoursFor(person.id),0);return {product:product.name,total,allocated,available:total-allocated,utilization:total?Math.round(allocated/total*100):0}});
   const capacityChart = ["Jul", "Ago", "Set"].map((m) => {
     const monthlyTotal = Math.round(totalCapacity / 3);
     const roadmapHours = Math.round(roadmapCapacity / 3);
@@ -936,10 +936,10 @@ function Roadmap() {
                   <div>
                     <b>{person.name}</b>
                     <small>
-                      {person.role} · {person.total - person.used}h disponíveis
+                      {person.role} · {person.total}h de capacidade
                     </small>
                   </div>
-                  <div className="allocation-hours"><input type="number" min="0" max={person.total-person.used} value={staffFor.allocations.find((a) => a.staffId === person.id)?.hours || 0} onChange={(e) => updateAllocation(person, Number(e.target.value))}/><span>horas</span></div>
+                  <div className="allocation-hours"><input type="number" min="0" max={person.total} value={staffFor.allocations.find((a) => a.staffId === person.id)?.hours || 0} onChange={(e) => updateAllocation(person, Number(e.target.value))}/><span>horas</span></div>
                 </label>
               ))}
             </div>
@@ -1415,7 +1415,7 @@ function Demands() {
                 )}
               </div>
               <div className="form-field team-readonly"><label>Time responsável <I.Lock/></label><div><I.UsersRound/><span><b>{selectedProduct?.team || "Selecione um produto"}</b><small>{selectedProduct ? `Coordenador: ${selectedProduct.coordinator}` : "Preenchido automaticamente"}</small></span></div></div>
-              <div className="form-field wide"><label>Recursos</label><div className="resource-selector">{!form.product?<p>Selecione um produto para visualizar os colaboradores da squad.</p>:availableResources.length===0?<p>Nenhum colaborador cadastrado para {selectedProduct?.team}.</p>:availableResources.map((person)=><label key={person.id} className={form.resourceIds.includes(person.id)?"selected":""}><input type="checkbox" checked={form.resourceIds.includes(person.id)} onChange={()=>setForm({...form,resourceIds:form.resourceIds.includes(person.id)?form.resourceIds.filter((id)=>id!==person.id):[...form.resourceIds,person.id]})}/><span className="avatar">{person.name.split(" ").map((x)=>x[0]).slice(0,2).join("")}</span><span><b>{person.name}</b><small>{person.role} · {person.total-person.used}h disponíveis</small></span></label>)}</div><small className="resource-help">{form.resourceIds.length} recurso(s) selecionado(s)</small></div>
+              <div className="form-field wide"><label>Recursos</label><div className="resource-selector">{!form.product?<p>Selecione um produto para visualizar os colaboradores da squad.</p>:availableResources.length===0?<p>Nenhum colaborador cadastrado para {selectedProduct?.team}.</p>:availableResources.map((person)=><label key={person.id} className={form.resourceIds.includes(person.id)?"selected":""}><input type="checkbox" checked={form.resourceIds.includes(person.id)} onChange={()=>setForm({...form,resourceIds:form.resourceIds.includes(person.id)?form.resourceIds.filter((id)=>id!==person.id):[...form.resourceIds,person.id]})}/><span className="avatar">{person.name.split(" ").map((x)=>x[0]).slice(0,2).join("")}</span><span><b>{person.name}</b><small>{person.role} · {person.total}h de capacidade</small></span></label>)}</div><small className="resource-help">{form.resourceIds.length} recurso(s) selecionado(s)</small></div>
               <div className="form-field">
                 <label>
                   Categoria <em>*</em>
@@ -2033,7 +2033,7 @@ function Capacity() {
   }).filter((item) => item.hours > 0);
   const allocatedDemandHours = (person: Staff) =>
     demandAllocations(person).reduce((sum, item) => sum + item.hours, 0);
-  const effectiveUsed = (person: Staff) => person.used + allocatedDemandHours(person);
+  const effectiveUsed = (person: Staff) => allocatedDemandHours(person);
   const filteredTeam=productFilter==="Todos"?team:team.filter((person)=>person.product===productFilter);
   const total = filteredTeam.reduce((sum, m) => sum + m.total, 0);
   const used = filteredTeam.reduce((sum, m) => sum + effectiveUsed(m), 0);
@@ -2185,7 +2185,7 @@ function Capacity() {
                   <small>
                     {allocated}h de {m.total}h · {pct}% alocado
                   </small>
-                  <small>{m.used}h base + {demandHours}h em demandas</small>
+                  <small>{demandHours}h provenientes das demandas</small>
                 </div>
                 <b className={pct > 90 ? "bad" : ""}>{pct}%</b>
                 <span className={m.total - allocated < 0 ? "bad" : ""}>
