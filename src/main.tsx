@@ -404,7 +404,7 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
     const sustentacao = Math.round(baseCapacity / 3);
     return { m, roadmap: roadmapHours, sustentacao, novas: 0, reserva: Math.max(0, monthlyTotal - roadmapHours - sustentacao) };
   });
-  const completed = scoped.filter((d) => d.status === "Concluída").length;
+  const completed = scoped.filter((d) => ["Concluído", "Concluída"].includes(d.status)).length;
   const critical = scoped.filter((d) => d.risk === "Crítico" || d.risk === "Alto").length;
   const progress = scoped.length ? Math.round(scoped.reduce((sum, d) => sum + d.progress, 0) / scoped.length) : 0;
   const kpis = [
@@ -656,7 +656,7 @@ function DemandTable({ compact = false }: { compact?: boolean }) {
               <td>
                 <Badge
                   tone={
-                    d.status === "Concluída"
+                    ["Concluído", "Concluída"].includes(d.status)
                       ? "good"
                       : d.status === "Bloqueada"
                         ? "bad"
@@ -1112,6 +1112,7 @@ const emptyDemandForm = {
   requester: "",
   priority: "Média",
   status: "Backlog",
+  progress: "0",
   due: "",
   startDate: "",
   effort: "40",
@@ -1150,7 +1151,17 @@ function Demands() {
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >,
-  ) => setForm(e.target.name === "product" ? { ...form, product: e.target.value, resourceIds: [] } : { ...form, [e.target.name]: e.target.value });
+  ) => {
+    if (e.target.name === "product") {
+      setForm({ ...form, product: e.target.value, resourceIds: [] });
+      return;
+    }
+    if (e.target.name === "status" && e.target.value === "Concluído") {
+      setForm({ ...form, status: "Concluído", progress: "100" });
+      return;
+    }
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
   const importExcel=async(e:React.ChangeEvent<HTMLInputElement>)=>{const file=e.target.files?.[0];if(!file)return;setImporting(true);setImportFeedback("");try{const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await file.arrayBuffer());const sheet=workbook.worksheets[0];if(!sheet)throw new Error("Planilha sem conteúdo");const headers:Record<number,string>={};sheet.getRow(1).eachCell((cell,col)=>{headers[col]=String(cell.text).trim().toLowerCase()});const imported:Demand[]=[];let ignored=0;const text=(row:ExcelJS.Row,names:string[])=>{const col=Object.entries(headers).find(([,header])=>names.includes(header))?.[0];return col?row.getCell(Number(col)).text.trim():""};const iso=(value:string)=>{if(!value)return "";const match=value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);return match?`${match[3]}-${match[2].padStart(2,"0")}-${match[1].padStart(2,"0")}`: /^\d{4}-\d{2}-\d{2}$/.test(value)?value:""};const nextId=Math.max(...rows.map((d)=>Number(d.id.replace(/\D/g,""))||0),159)+1;sheet.eachRow((row,rowNumber)=>{if(rowNumber===1)return;const name=text(row,["demanda","título","titulo"]);const productText=text(row,["produto"]);const product=products.find((p)=>p.name.toLowerCase()===productText.toLowerCase()&&p.active);if(!name||!product){ignored++;return}const dueDate=iso(text(row,["prazo","prazo desejado","data fim","data de fim"]));const effort=Number(text(row,["capacidade estimada","esforço","esforco","horas"]).replace(",","."))||0;imported.push({id:`DEV-${nextId+imported.length}`,name,product:product.name,owner:product.coordinator.split(" ")[0],status:text(row,["status"])||"Backlog",priority:text(row,["prioridade"])||"Média",effort,progress:0,due:dueDate?new Date(dueDate+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".",""):"Sem prazo",dueDate,startDate:iso(text(row,["data de início","data de inicio","início","inicio"])),risk:"Médio",type:text(row,["categoria","tipo"])||"Evolutiva",version:text(row,["versão","versao"]),notes:text(row,["observações","observacoes"]),resourceIds:[]})});if(imported.length)setRows((current)=>[...imported,...current]);setImportFeedback(`${imported.length} demanda(s) importada(s)${ignored?` · ${ignored} linha(s) ignorada(s)`:""}.`)}catch{setImportFeedback("Não foi possível ler a planilha. Verifique o formato e os cabeçalhos.")}finally{setImporting(false);e.target.value=""}};
   const close = () => {
     setModal(false);
@@ -1186,6 +1197,7 @@ function Demands() {
       product: d.product,
       priority: d.priority,
       status: d.status,
+      progress: String(d.progress),
       type: d.type || "Evolutiva",
       version: d.version || "",
       description: d.notes || "",
@@ -1217,10 +1229,10 @@ function Demands() {
       name: form.name.trim(),
       product: form.product,
       owner: selectedProduct?.coordinator.split(" ")[0] || "Time",
-      status: form.status,
+      status: Number(form.progress) === 100 ? "Concluído" : form.status,
       priority: form.priority,
       effort: Number(form.effort),
-      progress: editing?.progress || 0,
+      progress: Math.min(100, Math.max(0, Number(form.progress) || 0)),
       due,
       dueDate: form.due,
       risk: form.priority === "Crítica" ? "Alto" : editing?.risk || "Médio",
@@ -1326,6 +1338,7 @@ function Demands() {
               <div><span>Data de início</span><b>{viewing.startDate ? new Date(viewing.startDate + "T12:00:00").toLocaleDateString("pt-BR") : "Não informada"}</b></div>
               <div><span>Prazo desejado</span><b>{viewing.dueDate ? new Date(viewing.dueDate + "T12:00:00").toLocaleDateString("pt-BR") : viewing.due}</b></div>
               <div><span>Esforço estimado</span><b>{viewing.effort}h</b></div>
+              <div><span>Evolução</span><b>{viewing.progress}%</b></div>
               <div><span>Quarter</span><b>{roadmap.find((item) => item.demandId === viewing.id)?.quarter || "Planejamento"}</b></div>
               <div className="wide"><span>Recursos</span><b>{(viewing.resourceIds || []).map((id) => team.find((person) => person.id === id)?.name).filter(Boolean).join(", ") || "Nenhum recurso alocado"}</b></div>
               <div className="wide"><span>Observações</span><p>{viewing.notes || "Nenhuma observação cadastrada."}</p></div>
@@ -1467,7 +1480,8 @@ function Demands() {
                   <option>Crítica</option>
                 </select>
               </div>
-              <div className="form-field"><label>Status</label><select name="status" value={form.status} onChange={change}><option>Backlog</option><option>Planejada</option><option>Em análise</option><option>Desenvolvimento</option><option>Em testes</option><option>Homologação</option><option>Concluída</option><option>Cancelada</option><option>Bloqueada</option></select></div>
+              <div className="form-field"><label>Status</label><select name="status" value={form.status} onChange={change}><option>Backlog</option><option>Planejada</option><option>Em análise</option><option>Desenvolvimento</option><option>Em testes</option><option>Homologação</option><option>Concluído</option><option>Concluída</option><option>Cancelada</option><option>Bloqueada</option></select></div>
+              <div className="form-field"><label htmlFor="demandProgress">Evolução da demanda (%)</label><input id="demandProgress" type="number" name="progress" min="0" max="100" step="1" value={form.progress} onChange={(e)=>{const progress=String(Math.min(100,Math.max(0,Number(e.target.value))));setForm({...form,progress,status:Number(progress)===100?"Concluído":form.status})}}/><small className="resource-help">Ao atingir 100%, o status será alterado para Concluído.</small></div>
               {!editing&&<div className="form-field"><label>Planejamento inicial</label><select name="planningQuarter" value={form.planningQuarter} onChange={change}><option value="Planejamento">Deixar em planejamento</option>{quarters.map((quarter)=><option key={quarter}>{quarter}</option>)}</select><small className="resource-help">O quarter pertence ao planejamento, não à demanda.</small></div>}
               <div className="form-field">
                 <label htmlFor="startDate">Data de início</label>
@@ -1645,7 +1659,7 @@ function DemandTableRows({
                   tone={
                     d.status === "Bloqueada"
                       ? "bad"
-                      : d.status === "Concluída"
+                      : ["Concluído", "Concluída"].includes(d.status)
                         ? "good"
                         : "blue"
                   }
