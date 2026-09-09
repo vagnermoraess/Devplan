@@ -25,6 +25,7 @@ import {
 } from "recharts";
 import "./styles.css";
 import "./dashboard.css";
+import "./capacity.css";
 
 type Page =
   | "Visão geral"
@@ -1900,15 +1901,20 @@ const emptyStaff = {
 function Capacity() {
   const { team, setTeam } = useTeam();
   const { products } = useProducts();
+  const { rows, roadmap } = useDemands();
+  const [productFilter,setProductFilter]=useState("Todos");
+  const [allocationFor,setAllocationFor]=useState<Staff|null>(null);
   const [form, setForm] = useState(emptyStaff);
   const [editing, setEditing] = useState<Staff | null>(null);
   const [removing, setRemoving] = useState<Staff | null>(null);
   const [modal, setModal] = useState(false);
   const [error, setError] = useState("");
-  const total = team.reduce((sum, m) => sum + m.total, 0);
-  const used = team.reduce((sum, m) => sum + m.used, 0);
+  const filteredTeam=productFilter==="Todos"?team:team.filter((person)=>person.product===productFilter);
+  const total = filteredTeam.reduce((sum, m) => sum + m.total, 0);
+  const used = filteredTeam.reduce((sum, m) => sum + m.used, 0);
   const free = total - used;
-  const overloaded = team.filter((m) => m.used / m.total > 0.9).length;
+  const overloaded = filteredTeam.filter((m) => m.used / m.total > 0.9).length;
+  const allocatedDemands=allocationFor?roadmap.flatMap((plan)=>{const allocation=plan.allocations.find((item)=>item.staffId===allocationFor.id);const demand=rows.find((item)=>item.id===plan.demandId);return allocation&&demand?[{demand,plan,hours:allocation.hours}]:[]}):[];
   const openNew = () => {
     setEditing(null);
     setForm(emptyStaff);
@@ -1978,11 +1984,12 @@ function Capacity() {
           </button>
         }
       />
+      <div className="capacity-filter"><div><I.Boxes/><span><b>Capacidade por produto</b><small>Filtre os indicadores e colaboradores</small></span></div><select value={productFilter} onChange={(e)=>setProductFilter(e.target.value)}><option>Todos</option>{products.filter((product)=>product.active).map((product)=><option key={product.id} value={product.name}>{product.name}</option>)}</select></div>
       <div className="kpis compact">
         <Card>
           <span>Capacidade total</span>
           <strong>{total}h</strong>
-          <small>{team.length} colaboradores</small>
+          <small>{filteredTeam.length} colaboradores</small>
         </Card>
         <Card>
           <span>Alocada</span>
@@ -2012,10 +2019,10 @@ function Capacity() {
             <h3>Alocação por colaborador</h3>
             <p>Capacidade planejada para setembro</p>
           </div>
-          <Badge tone="gray">{team.length} pessoas</Badge>
+          <Badge tone="gray">{filteredTeam.length} pessoas</Badge>
         </div>
         <div className="people">
-          {team.map((m) => {
+          {filteredTeam.map((m) => {
             const pct = Math.round((m.used / m.total) * 100);
             return (
               <div className="member member-managed" key={m.id}>
@@ -2033,7 +2040,7 @@ function Capacity() {
                   </small>
                 </div>
                 <div className="usage">
-                  <div>
+                  <div className="usage-bar" role="button" tabIndex={0} title="Ver demandas alocadas" onClick={()=>setAllocationFor(m)} onKeyDown={(e)=>{if(e.key==="Enter")setAllocationFor(m)}}>
                     <i
                       className={pct > 90 ? "hot" : ""}
                       style={{ width: Math.min(pct, 100) + "%" }}
@@ -2065,7 +2072,7 @@ function Capacity() {
               </div>
             );
           })}
-          {team.length === 0 && (
+          {filteredTeam.length === 0 && (
             <div className="team-empty">
               <I.Users />
               <b>Nenhum colaborador cadastrado</b>
@@ -2076,6 +2083,7 @@ function Capacity() {
           )}
         </div>
       </Card>
+      {allocationFor&&<div className="overlay confirm-overlay" onMouseDown={()=>setAllocationFor(null)}><div className="capacity-demand-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-head"><div><span className="modal-icon"><I.ListTodo/></span><div><h2>Demandas alocadas</h2><p>{allocationFor.name} · {allocationFor.product}</p></div></div><button className="modal-close" onClick={()=>setAllocationFor(null)}><I.X/></button></div><div className="capacity-demand-list">{allocatedDemands.length===0?<div className="picker-empty"><I.CalendarX/><b>Nenhuma demanda alocada</b><span>Não existem alocações no Roadmap para este colaborador.</span></div>:allocatedDemands.map(({demand,plan,hours})=><div key={demand.id}><span className="demand-dot"/><div><b>{demand.name}</b><small>{demand.id} · {demand.product} · {plan.quarter}</small></div><Badge tone="blue">{hours}h</Badge></div>)}</div><div className="allocation-total"><span>Total nas demandas</span><b>{allocatedDemands.reduce((sum,item)=>sum+item.hours,0)}h</b></div><div className="picker-foot"><button className="primary" onClick={()=>setAllocationFor(null)}>Fechar</button></div></div></div>}
       {modal && (
         <div className="overlay confirm-overlay" onMouseDown={close}>
           <form
