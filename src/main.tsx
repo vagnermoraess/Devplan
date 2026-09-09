@@ -27,6 +27,7 @@ import "./styles.css";
 import "./dashboard.css";
 import "./capacity.css";
 import "./changes.css";
+import "./demands.css";
 
 type Page =
   | "Visão geral"
@@ -1071,7 +1072,7 @@ const emptyDemandForm = {
 };
 function Demands() {
   const [q, setQ] = useState("");
-  const { rows, setRows, setRoadmap, setHistory } = useDemands();
+  const { rows, setRows, roadmap, setRoadmap, setHistory } = useDemands();
   const { products } = useProducts();
   const { team } = useTeam();
   const [modal, setModal] = useState(false);
@@ -1083,11 +1084,15 @@ function Demands() {
   const fileRef=useRef<HTMLInputElement>(null);
   const [importing,setImporting]=useState(false);
   const [importFeedback,setImportFeedback]=useState("");
+  const [productFilter,setProductFilter]=useState("Todos");
+  const [quarterFilter,setQuarterFilter]=useState("Todos");
   const selectedProduct = products.find((product) => product.name === form.product);
   const availableResources = team.filter((person) => person.product === form.product);
-  const filtered = rows.filter((d) =>
-    (d.name + d.id + d.product).toLowerCase().includes(q.toLowerCase()),
-  );
+  const filtered = rows.filter((d) => {
+    const planning=roadmap.find((item)=>item.demandId===d.id);
+    const matchesQuarter=quarterFilter==="Todos"||(quarterFilter==="Planejamento"?!planning:planning?.quarter===quarterFilter);
+    return (d.name+d.id+d.product).toLowerCase().includes(q.toLowerCase())&&(productFilter==="Todos"||d.product===productFilter)&&matchesQuarter;
+  });
   const change = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -1210,9 +1215,9 @@ function Demands() {
             onChange={(e) => setQ(e.target.value)}
           />
         </label>
-        <button>
-          <I.Filter /> Filtros <Badge>3</Badge>
-        </button>
+        <label className="demand-filter"><I.Boxes/><select aria-label="Filtrar por produto" value={productFilter} onChange={(e)=>setProductFilter(e.target.value)}><option>Todos</option>{products.filter((product)=>product.active).map((product)=><option key={product.id} value={product.name}>{product.name}</option>)}</select></label>
+        <label className="demand-filter"><I.CalendarRange/><select aria-label="Filtrar por quarter" value={quarterFilter} onChange={(e)=>setQuarterFilter(e.target.value)}><option>Todos</option><option>Planejamento</option>{quarters.map((quarter)=><option key={quarter}>{quarter}</option>)}</select></label>
+        {(productFilter!=="Todos"||quarterFilter!=="Todos")&&<button onClick={()=>{setProductFilter("Todos");setQuarterFilter("Todos")}}><I.X/> Limpar</button>}
         <button onClick={()=>fileRef.current?.click()} disabled={importing}>
           {importing?<I.LoaderCircle className="spin"/>:<I.FileSpreadsheet/>} {importing?"Importando...":"Importar Excel"}
         </button>
