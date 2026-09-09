@@ -795,21 +795,23 @@ function Roadmap() {
             </button>
           ))}
         </div>
-        <label className="quarter-select">
-          <I.Boxes />
-          <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)}>
-            <option>Todos</option>
-            {products.filter((product) => product.active).map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
-          </select>
-        </label>
-        <label className="quarter-select">
-          <I.CalendarRange />
-          <select value={quarter} onChange={(e) => setQuarter(e.target.value)}>
-            {quarters.map((q) => (
-              <option key={q}>{q}</option>
-            ))}
-          </select>
-        </label>
+        <div className="roadmap-filters">
+          <label className="quarter-select">
+            <I.Boxes />
+            <select aria-label="Filtrar Roadmap por produto" value={productFilter} onChange={(e) => setProductFilter(e.target.value)}>
+              <option>Todos</option>
+              {products.filter((product) => product.active).map((product) => <option key={product.id} value={product.name}>{product.name}</option>)}
+            </select>
+          </label>
+          <label className="quarter-select">
+            <I.CalendarRange />
+            <select aria-label="Filtrar Roadmap por quarter" value={quarter} onChange={(e) => setQuarter(e.target.value)}>
+              {quarters.map((q) => (
+                <option key={q}>{q}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
       {items.length === 0 ? (
         <Card className="roadmap-empty">
@@ -1129,6 +1131,7 @@ function Demands() {
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState<Demand | null>(null);
   const [removing, setRemoving] = useState<Demand | null>(null);
+  const [viewing, setViewing] = useState<Demand | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState(emptyDemandForm);
   const fileRef=useRef<HTMLInputElement>(null);
@@ -1303,10 +1306,34 @@ function Demands() {
         </div>
         <DemandTableRows
           rows={filtered}
+          onView={setViewing}
           onEdit={openEdit}
           onRemove={setRemoving}
         />
       </Card>
+      {viewing && (
+        <div className="overlay confirm-overlay" onMouseDown={() => setViewing(null)}>
+          <div className="demand-summary-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div><span className="modal-icon"><I.ClipboardList /></span><div><h2>{viewing.name}</h2><p>{viewing.id} · {viewing.product}</p></div></div>
+              <button className="modal-close" onClick={() => setViewing(null)}><I.X /></button>
+            </div>
+            <div className="demand-summary-grid">
+              <div><span>Status</span><b>{viewing.status}</b></div>
+              <div><span>Prioridade</span><b>{viewing.priority}</b></div>
+              <div><span>Categoria</span><b>{viewing.type || "Não informada"}</b></div>
+              <div><span>Responsável</span><b>{viewing.owner}</b></div>
+              <div><span>Data de início</span><b>{viewing.startDate ? new Date(viewing.startDate + "T12:00:00").toLocaleDateString("pt-BR") : "Não informada"}</b></div>
+              <div><span>Prazo desejado</span><b>{viewing.dueDate ? new Date(viewing.dueDate + "T12:00:00").toLocaleDateString("pt-BR") : viewing.due}</b></div>
+              <div><span>Esforço estimado</span><b>{viewing.effort}h</b></div>
+              <div><span>Quarter</span><b>{roadmap.find((item) => item.demandId === viewing.id)?.quarter || "Planejamento"}</b></div>
+              <div className="wide"><span>Recursos</span><b>{(viewing.resourceIds || []).map((id) => team.find((person) => person.id === id)?.name).filter(Boolean).join(", ") || "Nenhum recurso alocado"}</b></div>
+              <div className="wide"><span>Observações</span><p>{viewing.notes || "Nenhuma observação cadastrada."}</p></div>
+            </div>
+            <div className="picker-foot"><button className="primary" onClick={() => setViewing(null)}>Fechar</button></div>
+          </div>
+        </div>
+      )}
       {modal && (
         <div className="overlay demand-overlay" onMouseDown={close}>
           <form
@@ -1576,10 +1603,12 @@ function Demands() {
 }
 function DemandTableRows({
   rows,
+  onView,
   onEdit,
   onRemove,
 }: {
   rows: Demand[];
+  onView?: (d: Demand) => void;
   onEdit?: (d: Demand) => void;
   onRemove?: (d: Demand) => void;
 }) {
@@ -1603,7 +1632,7 @@ function DemandTableRows({
           {rows.map((d) => (
             <tr key={d.id}>
               <td>
-                <b>{d.name}</b>
+                {onView ? <button className="demand-title-button" onClick={() => onView(d)}>{d.name}</button> : <b>{d.name}</b>}
                 <small>{d.id}</small>
               </td>
               <td>{d.product}</td>

@@ -22,3 +22,14 @@
 @media (max-width: 760px) {
   .demand-filter { min-width: 150px; }
 }
+
+.demand-title-button { display: block; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.demand-title-button:hover { color: #246bfd; text-decoration: underline; }
+.demand-title-button:focus-visible { border-radius: 3px; outline: 2px solid #246bfd; outline-offset: 3px; }
+.demand-summary-modal { width: min(650px, 100%); overflow: hidden; border: 1px solid var(--line); border-radius: 15px; background: var(--bg); color: inherit; box-shadow: 0 28px 90px #07122866; }
+.demand-summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 20px 24px; }
+.demand-summary-grid > div { display: flex; flex-direction: column; gap: 5px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--soft); }
+.demand-summary-grid > div.wide { grid-column: 1 / -1; }
+.demand-summary-grid span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .4px; }
+.demand-summary-grid b, .demand-summary-grid p { margin: 0; font-size: 11px; line-height: 1.5; }
+@media (max-width: 620px) { .demand-summary-grid { grid-template-columns: 1fr; } .demand-summary-grid > div.wide { grid-column: auto; } }
