@@ -295,11 +295,6 @@ const nav: [Page, any][] = [
   ["Configurações", I.Settings],
   ["Usuários", I.UserCog],
 ];
-const cap = [
-  { m: "Jul", roadmap: 220, sustentacao: 42, novas: 18, reserva: 28 },
-  { m: "Ago", roadmap: 248, sustentacao: 48, novas: 34, reserva: 22 },
-  { m: "Set", roadmap: 252, sustentacao: 50, novas: 28, reserva: 50 },
-];
 const trend = [
   { w: "S1", plan: 22, done: 18 },
   { w: "S2", plan: 34, done: 28 },
@@ -380,12 +375,40 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
   const effort = scoped.reduce((sum, demand) => sum + demand.effort, 0);
   const scopedTeam = productFilter === "Todos" ? team : team.filter((person) => person.product === productFilter);
   const totalCapacity = scopedTeam.reduce((sum, person) => sum + person.total, 0);
-  const capacityByProduct=products.filter((product)=>product.active&&(productFilter==="Todos"||product.name===productFilter)).map((product)=>{const people=team.filter((person)=>person.product===product.name);const total=people.reduce((sum,person)=>sum+person.total,0);const allocated=people.reduce((sum,person)=>sum+person.used,0);return {product:product.name,total,allocated,available:total-allocated,utilization:total?Math.round(allocated/total*100):0}});
+  const demandHoursFor = (staffId: number) => rows.reduce((total, demand) => {
+    const plan = roadmap.find((item) => item.demandId === demand.id);
+    const explicit = plan?.allocations.find((item) => item.staffId === staffId);
+    const linkedIds = demand.resourceIds || [];
+    if (!explicit && !linkedIds.includes(staffId)) return total;
+    const explicitTotal = (plan?.allocations || []).reduce((sum, item) => sum + item.hours, 0);
+    const resourcesWithoutAdjustment = linkedIds.filter(
+      (id) => !plan?.allocations.some((item) => item.staffId === id),
+    );
+    const calculated = resourcesWithoutAdjustment.length
+      ? Math.round(Math.max(0, demand.effort - explicitTotal) / resourcesWithoutAdjustment.length)
+      : 0;
+    return total + (explicit?.hours ?? calculated);
+  }, 0);
+  const allocatedCapacity = scopedTeam.reduce(
+    (sum, person) => sum + person.used + demandHoursFor(person.id),
+    0,
+  );
+  const roadmapCapacity = scopedTeam.reduce((sum, person) => sum + demandHoursFor(person.id), 0);
+  const baseCapacity = scopedTeam.reduce((sum, person) => sum + person.used, 0);
+  const availableCapacity = Math.max(0, totalCapacity - allocatedCapacity);
+  const utilization = totalCapacity ? Math.round((allocatedCapacity / totalCapacity) * 100) : 0;
+  const capacityByProduct=products.filter((product)=>product.active&&(productFilter==="Todos"||product.name===productFilter)).map((product)=>{const people=team.filter((person)=>person.product===product.name);const total=people.reduce((sum,person)=>sum+person.total,0);const allocated=people.reduce((sum,person)=>sum+person.used+demandHoursFor(person.id),0);return {product:product.name,total,allocated,available:total-allocated,utilization:total?Math.round(allocated/total*100):0}});
+  const capacityChart = ["Jul", "Ago", "Set"].map((m) => {
+    const monthlyTotal = Math.round(totalCapacity / 3);
+    const roadmapHours = Math.round(roadmapCapacity / 3);
+    const sustentacao = Math.round(baseCapacity / 3);
+    return { m, roadmap: roadmapHours, sustentacao, novas: 0, reserva: Math.max(0, monthlyTotal - roadmapHours - sustentacao) };
+  });
   const completed = scoped.filter((d) => d.status === "Concluída").length;
   const critical = scoped.filter((d) => d.risk === "Crítico" || d.risk === "Alto").length;
   const progress = scoped.length ? Math.round(scoped.reduce((sum, d) => sum + d.progress, 0) / scoped.length) : 0;
   const kpis = [
-    ["Capacidade total", `${totalCapacity}h`, `${scopedTeam.length} colaboradores`, "blue", I.Users],
+    ["Capacidade total", `${totalCapacity}h`, `${utilization}% alocada · ${scopedTeam.length} colaboradores`, utilization > 90 ? "bad" : "blue", I.Users],
     ["Capacidade estimada", `${effort}h`, `${scoped.length} demandas`, "warn", I.Gauge],
     ["Roadmap planejado", String(planned.length), `${completed} concluídas`, "blue", I.Map],
     ["Progresso médio", `${progress}%`, "no escopo atual", "good", I.Crosshair],
@@ -434,7 +457,7 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
           </div>
           <div className="chart">
             <ResponsiveContainer>
-              <BarChart data={cap} barGap={0}>
+              <BarChart data={capacityChart} barGap={0}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="m" />
                 <YAxis />
@@ -470,19 +493,19 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
           <div className="legend">
             <span>
               <i className="b" />
-              Roadmap 69%
+              Roadmap {totalCapacity ? Math.round(roadmapCapacity / totalCapacity * 100) : 0}%
             </span>
             <span>
               <i className="c" />
-              Sustentação 13%
+              Sustentação {totalCapacity ? Math.round(baseCapacity / totalCapacity * 100) : 0}%
             </span>
             <span>
               <i className="a" />
-              Novas 8%
+              Novas 0%
             </span>
             <span>
               <i />
-              Reserva 10%
+              Reserva {totalCapacity ? Math.round(availableCapacity / totalCapacity * 100) : 0}%
             </span>
           </div>
         </Card>
@@ -1957,8 +1980,31 @@ function Capacity() {
   const fileRef=useRef<HTMLInputElement>(null);
   const [importing,setImporting]=useState(false);
   const [importFeedback,setImportFeedback]=useState("");
-  const demandAllocations=(person:Staff)=>rows.flatMap((demand)=>{const plan=roadmap.find((item)=>item.demandId===demand.id);const explicit=plan?.allocations.find((item)=>item.staffId===person.id);const linked=demand.resourceIds?.includes(person.id);if(!explicit&&!linked)return [];const linkedCount=Math.max(1,demand.resourceIds?.length||1);return [{demand,plan:plan||{demandId:demand.id,quarter:"Planejamento",collaborators:[],allocations:[]},hours:explicit?.hours||Math.round(demand.effort/linkedCount)}]});
-  const effectiveUsed=(person:Staff)=>person.used+demandAllocations(person).reduce((sum,item)=>sum+item.hours,0);
+  const demandAllocations = (person: Staff) => rows.flatMap((demand) => {
+    const plan = roadmap.find((item) => item.demandId === demand.id);
+    const explicit = plan?.allocations.find((item) => item.staffId === person.id);
+    const linkedIds = demand.resourceIds || [];
+    const linked = linkedIds.includes(person.id);
+    if (!explicit && !linked) return [];
+
+    const explicitTotal = (plan?.allocations || []).reduce((sum, item) => sum + item.hours, 0);
+    const linkedWithoutAdjustment = linkedIds.filter(
+      (staffId) => !plan?.allocations.some((item) => item.staffId === staffId),
+    );
+    const remainingEffort = Math.max(0, demand.effort - explicitTotal);
+    const calculatedHours = linkedWithoutAdjustment.length
+      ? Math.round(remainingEffort / linkedWithoutAdjustment.length)
+      : 0;
+
+    return [{
+      demand,
+      plan: plan || { demandId: demand.id, quarter: "Planejamento", collaborators: [], allocations: [] },
+      hours: explicit?.hours ?? calculatedHours,
+    }];
+  }).filter((item) => item.hours > 0);
+  const allocatedDemandHours = (person: Staff) =>
+    demandAllocations(person).reduce((sum, item) => sum + item.hours, 0);
+  const effectiveUsed = (person: Staff) => person.used + allocatedDemandHours(person);
   const filteredTeam=productFilter==="Todos"?team:team.filter((person)=>person.product===productFilter);
   const total = filteredTeam.reduce((sum, m) => sum + m.total, 0);
   const used = filteredTeam.reduce((sum, m) => sum + effectiveUsed(m), 0);
@@ -2083,6 +2129,7 @@ function Capacity() {
         <div className="people">
           {filteredTeam.map((m) => {
             const allocated=effectiveUsed(m);
+            const demandHours=allocatedDemandHours(m);
             const pct = Math.round((allocated / m.total) * 100);
             return (
               <div className="member member-managed" key={m.id}>
@@ -2107,8 +2154,9 @@ function Capacity() {
                     />
                   </div>
                   <small>
-                    {allocated}h de {m.total}h
+                    {allocated}h de {m.total}h · {pct}% alocado
                   </small>
+                  <small>{m.used}h base + {demandHours}h em demandas</small>
                 </div>
                 <b className={pct > 90 ? "bad" : ""}>{pct}%</b>
                 <span className={m.total - allocated < 0 ? "bad" : ""}>
