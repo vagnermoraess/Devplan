@@ -26,6 +26,7 @@ import {
 import "./styles.css";
 import "./dashboard.css";
 import "./capacity.css";
+import "./changes.css";
 
 type Page =
   | "Visão geral"
@@ -57,7 +58,7 @@ type Demand = {
   dueDate?: string;
   resourceIds?: number[];
 };
-type ChangeLog={id:number;date:string;title:string;actor:string;detail:string;tone:"blue"|"good"|"warn"|"bad"};
+type ChangeLog={id:number;date:string;title:string;actor:string;detail:string;tone:"blue"|"good"|"warn"|"bad";product?:string;quarter?:string};
 type Product = {
   id: number;
   name: string;
@@ -679,13 +680,13 @@ function Roadmap() {
     (d) => !roadmap.some((r) => r.demandId === d.id),
   );
   const months = quarterMonths[quarter.slice(0, 2)];
-  const register=(title:string,detail:string,tone:ChangeLog["tone"]="blue")=>setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}),title,actor:"Vagner Moraes",detail,tone},...current]);
+  const register=(title:string,detail:string,tone:ChangeLog["tone"]="blue",eventQuarter?:string)=>{const demandId=detail.match(/DEV-\d+/)?.[0];const product=rows.find((d)=>d.id===demandId)?.product;setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}),title,actor:"Vagner Moraes",detail,tone,product,quarter:eventQuarter},...current])};
   const add = (id: string) => {
     setRoadmap((current) => [
       ...current,
       { demandId: id, quarter, collaborators: [], allocations: [] },
     ]);
-    register("Demanda adicionada ao roadmap",`${id} planejada em ${quarter}`,"good");
+    register("Demanda adicionada ao roadmap",`${id} planejada em ${quarter}`,"good",quarter);
     setPicker(false);
   };
   const move = (id: string, destination: string) => {
@@ -695,9 +696,9 @@ function Roadmap() {
         r.demandId === id ? { ...r, quarter: destination } : r,
       ),
     );
-    register("Demanda movida de quarter",`${id}: ${origin} → ${destination}`,"warn");
+    register("Demanda movida de quarter",`${id}: ${origin} → ${destination}`,"warn",destination);
   };
-  const remove = (id: string) => {setRoadmap((current) => current.filter((r) => r.demandId !== id));register("Demanda removida do roadmap",`${id} removida do planejamento`,"bad")};
+  const remove = (id: string) => {const origin=roadmap.find((item)=>item.demandId===id)?.quarter;setRoadmap((current) => current.filter((r) => r.demandId !== id));register("Demanda removida do roadmap",`${id} removida do planejamento`,"bad",origin)};
   const updateAllocation = (person: Staff, hours: number) => {
     if (!staffFor) return;
     const allocations = hours > 0
@@ -709,7 +710,7 @@ function Roadmap() {
     setRoadmap((current) =>
       current.map((r) => (r.demandId === updated.demandId ? updated : r)),
     );
-    register("Alocação do roadmap alterada",`${updated.demandId}: ${allocations.reduce((sum,a)=>sum+a.hours,0)}h distribuídas entre ${collaborators.length} colaborador(es)`);
+    register("Alocação do roadmap alterada",`${updated.demandId}: ${allocations.reduce((sum,a)=>sum+a.hours,0)}h distribuídas entre ${collaborators.length} colaborador(es)`,"blue",updated.quarter);
   };
   return (
     <>
@@ -1178,7 +1179,7 @@ function Demands() {
     );
     if(!editing && form.planningQuarter!=="Planejamento"){
       setRoadmap((current)=>[...current,{demandId:data.id,quarter:form.planningQuarter,collaborators:[],allocations:[]}]);
-      setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR"),title:"Demanda planejada no cadastro",actor:"Vagner Moraes",detail:`${data.id} incluída em ${form.planningQuarter}`,tone:"good"},...current]);
+      setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR"),title:"Demanda planejada no cadastro",actor:"Vagner Moraes",detail:`${data.id} incluída em ${form.planningQuarter}`,tone:"good",product:data.product,quarter:form.planningQuarter},...current]);
     }
     close();
     setSaved(true);
@@ -2472,7 +2473,7 @@ function LegacyChanges() {
     </>
   );
 }
-function Changes(){const {history}=useDemands();return <><PageHead title="Mudanças do roadmap" desc="Histórico automático de inclusões, movimentações, remoções e alocações."/><Card>{history.length===0?<div className="changes-empty"><I.History/><b>Nenhuma alteração registrada nesta sessão</b><span>As ações realizadas no Roadmap aparecerão automaticamente aqui.</span></div>:history.map((item)=><div className="change" key={item.id}><div className={`changeicon log-${item.tone}`}>{item.tone==="good"?<I.Plus/>:item.tone==="bad"?<I.Trash2/>:item.tone==="warn"?<I.ArrowRightLeft/>:<I.Users/>}</div><div><small>{item.date}</small><b>{item.title}</b><span>por {item.actor}</span></div><Badge tone={item.tone}>{item.detail}</Badge></div>)}</Card></>}
+function Changes(){const {history}=useDemands();const {products}=useProducts();const [product,setProduct]=useState("Todos");const [quarter,setQuarter]=useState("Todos");const filtered=history.filter((item)=>(product==="Todos"||item.product===product)&&(quarter==="Todos"||item.quarter===quarter));return <><PageHead title="Mudanças do roadmap" desc="Histórico automático de inclusões, movimentações, remoções e alocações."/><div className="changes-filters"><div><I.Filter/><span><b>Filtrar histórico</b><small>{filtered.length} de {history.length} alterações</small></span></div><label>Produto<select value={product} onChange={(e)=>setProduct(e.target.value)}><option>Todos</option>{products.map((item)=><option key={item.id} value={item.name}>{item.name}</option>)}</select></label><label>Quarter<select value={quarter} onChange={(e)=>setQuarter(e.target.value)}><option>Todos</option>{quarters.map((item)=><option key={item}>{item}</option>)}</select></label>{(product!=="Todos"||quarter!=="Todos")&&<button onClick={()=>{setProduct("Todos");setQuarter("Todos")}}><I.X/> Limpar</button>}</div><Card>{filtered.length===0?<div className="changes-empty"><I.History/><b>Nenhuma alteração encontrada</b><span>{history.length?"Altere ou limpe os filtros para visualizar outros registros.":"As ações realizadas no Roadmap aparecerão automaticamente aqui."}</span></div>:filtered.map((item)=><div className="change" key={item.id}><div className={`changeicon log-${item.tone}`}>{item.tone==="good"?<I.Plus/>:item.tone==="bad"?<I.Trash2/>:item.tone==="warn"?<I.ArrowRightLeft/>:<I.Users/>}</div><div><small>{item.date}</small><b>{item.title}</b><span>por {item.actor}{item.product?` · ${item.product}`:""}{item.quarter?` · ${item.quarter}`:""}</span></div><Badge tone={item.tone}>{item.detail}</Badge></div>)}</Card></>}
 function Reports() {
   return (
     <>
