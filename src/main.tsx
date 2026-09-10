@@ -61,7 +61,6 @@ type Page =
   | "Produtos"
   | "Capacidade"
   | "Planejamento"
-  | "Riscos"
   | "Mudanças"
   | "Relatórios"
   | "Configurações"
@@ -302,7 +301,6 @@ const nav: [Page, any][] = [
   ["Produtos", I.Boxes],
   ["Capacidade", I.Users],
   ["Planejamento", I.CalendarRange],
-  ["Riscos", I.ShieldAlert],
   ["Mudanças", I.GitCompareArrows],
   ["Relatórios", I.BarChart3],
   ["Configurações", I.Settings],
@@ -1161,12 +1159,18 @@ function Demands() {
   const [importFeedback,setImportFeedback]=useState("");
   const [productFilter,setProductFilter]=useState("Todos");
   const [quarterFilter,setQuarterFilter]=useState("Todos");
+  const [executionFilter,setExecutionFilter]=useState("Todas");
+  const [excludedStatus,setExcludedStatus]=useState("Nenhum");
   const selectedProduct = products.find((product) => product.name === form.product);
   const availableResources = team.filter((person) => person.product === form.product);
+  const statusOptions=Array.from(new Set(rows.map((d)=>d.status))).sort();
+  const now=new Date();
+  const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
   const filtered = rows.filter((d) => {
     const planning=roadmap.find((item)=>item.demandId===d.id);
     const matchesQuarter=quarterFilter==="Todos"||(quarterFilter==="Planejamento"?!planning:planning?.quarter===quarterFilter);
-    return (d.name+d.id+d.product).toLowerCase().includes(q.toLowerCase())&&(productFilter==="Todos"||d.product===productFilter)&&matchesQuarter;
+    const runningToday=Boolean(d.startDate&&d.dueDate&&d.startDate<=today&&d.dueDate>=today);
+    return (d.name+d.id+d.product).toLowerCase().includes(q.toLowerCase())&&(productFilter==="Todos"||d.product===productFilter)&&matchesQuarter&&(executionFilter==="Todas"||runningToday)&&(excludedStatus==="Nenhum"||d.status!==excludedStatus);
   });
   const change = (
     e: React.ChangeEvent<
@@ -1317,7 +1321,9 @@ function Demands() {
         </label>
         <label className="demand-filter"><I.Boxes/><select aria-label="Filtrar por produto" value={productFilter} onChange={(e)=>setProductFilter(e.target.value)}><option>Todos</option>{products.filter((product)=>product.active).map((product)=><option key={product.id} value={product.name}>{product.name}</option>)}</select></label>
         <label className="demand-filter"><I.CalendarRange/><select aria-label="Filtrar por quarter" value={quarterFilter} onChange={(e)=>setQuarterFilter(e.target.value)}><option>Todos</option><option>Planejamento</option>{quarters.map((quarter)=><option key={quarter}>{quarter}</option>)}</select></label>
-        {(productFilter!=="Todos"||quarterFilter!=="Todos")&&<button onClick={()=>{setProductFilter("Todos");setQuarterFilter("Todos")}}><I.X/> Limpar</button>}
+        <label className="demand-filter"><I.Activity/><select aria-label="Filtrar demandas em execução" value={executionFilter} onChange={(e)=>setExecutionFilter(e.target.value)}><option>Todas</option><option value="Em execução hoje">Em execução hoje</option></select></label>
+        <label className="demand-filter"><I.FilterX/><select aria-label="Desconsiderar status" value={excludedStatus} onChange={(e)=>setExcludedStatus(e.target.value)}><option>Nenhum</option>{statusOptions.map((status)=><option key={status} value={status}>Exceto: {status}</option>)}</select></label>
+        {(productFilter!=="Todos"||quarterFilter!=="Todos"||executionFilter!=="Todas"||excludedStatus!=="Nenhum")&&<button onClick={()=>{setProductFilter("Todos");setQuarterFilter("Todos");setExecutionFilter("Todas");setExcludedStatus("Nenhum")}}><I.X/> Limpar</button>}
         <button onClick={()=>fileRef.current?.click()} disabled={importing}>
           {importing?<I.LoaderCircle className="spin"/>:<I.FileSpreadsheet/>} {importing?"Importando...":"Importar Excel"}
         </button>
@@ -2806,7 +2812,6 @@ function App() {
             >
               <Icon />
               <span>{n}</span>
-              {n === "Riscos" && <em>3</em>}
             </button>
           ))}
         </nav>
@@ -2864,8 +2869,6 @@ function App() {
             <Capacity />
           ) : page === "Planejamento" ? (
             <Planning />
-          ) : page === "Riscos" ? (
-            <Risks />
           ) : page === "Mudanças" ? (
             <Changes />
           ) : page === "Relatórios" ? (
