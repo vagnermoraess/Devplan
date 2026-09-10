@@ -56,6 +56,7 @@ function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
 type Page =
   | "Visão geral"
   | "Roadmap"
+  | "Comparação"
   | "Demandas"
   | "Produtos"
   | "Capacidade"
@@ -83,7 +84,7 @@ type Demand = {
   dueDate?: string;
   resourceIds?: number[];
 };
-type ChangeLog={id:number;date:string;title:string;actor:string;detail:string;tone:"blue"|"good"|"warn"|"bad";product?:string;quarter?:string};
+type ChangeLog={id:number;date:string;title:string;actor:string;detail:string;tone:"blue"|"good"|"warn"|"bad";product?:string;quarter?:string;demandId?:string;demandName?:string};
 type Product = {
   id: number;
   name: string;
@@ -162,6 +163,14 @@ type RoadmapEntry = {
   quarter: string;
   collaborators: string[];
   allocations: { staffId: number; hours: number }[];
+};
+type RoadmapVersion = {
+  id: number;
+  version: number;
+  quarter: string;
+  createdAt: string;
+  entries: RoadmapEntry[];
+  demands: Demand[];
 };
 const demands: Demand[] = [
   {
@@ -250,6 +259,8 @@ const DemandContext = createContext<{
   setRoadmap: React.Dispatch<React.SetStateAction<RoadmapEntry[]>>;
   history: ChangeLog[];
   setHistory: React.Dispatch<React.SetStateAction<ChangeLog[]>>;
+  versions: RoadmapVersion[];
+  setVersions: React.Dispatch<React.SetStateAction<RoadmapVersion[]>>;
 } | null>(null);
 function DemandProvider({ children }: { children: React.ReactNode }) {
   const [rows, setRows] = usePersistentState<Demand[]>("dev-plan:demands", demands);
@@ -263,8 +274,9 @@ function DemandProvider({ children }: { children: React.ReactNode }) {
     })),
   );
   const [history,setHistory]=usePersistentState<ChangeLog[]>("dev-plan:history", []);
+  const [versions,setVersions]=usePersistentState<RoadmapVersion[]>("dev-plan:roadmap-versions", []);
   return (
-    <DemandContext.Provider value={{ rows, setRows, roadmap, setRoadmap, history, setHistory }}>
+    <DemandContext.Provider value={{ rows, setRows, roadmap, setRoadmap, history, setHistory, versions, setVersions }}>
       {children}
     </DemandContext.Provider>
   );
@@ -286,6 +298,7 @@ const nav: [Page, any][] = [
   ["Visão geral", I.LayoutDashboard],
   ["Demandas", I.ListTodo],
   ["Roadmap", I.Map],
+  ["Comparação", I.GitCompareArrows],
   ["Produtos", I.Boxes],
   ["Capacidade", I.Users],
   ["Planejamento", I.CalendarRange],
@@ -715,7 +728,7 @@ const quarters = [
 ];
 
 function Roadmap() {
-  const { rows, roadmap, setRoadmap, setHistory } = useDemands();
+  const { rows, roadmap, setRoadmap, setHistory, versions, setVersions } = useDemands();
   const { team } = useTeam();
   const { products } = useProducts();
   const [view, setView] = useState("Timeline");
@@ -731,7 +744,19 @@ function Roadmap() {
     (d) => !roadmap.some((r) => r.demandId === d.id),
   );
   const months = quarterMonths[quarter.slice(0, 2)];
-  const register=(title:string,detail:string,tone:ChangeLog["tone"]="blue",eventQuarter?:string)=>{const demandId=detail.match(/DEV-\d+/)?.[0];const product=rows.find((d)=>d.id===demandId)?.product;setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}),title,actor:"Vagner Moraes",detail,tone,product,quarter:eventQuarter},...current])};
+  const register=(title:string,detail:string,tone:ChangeLog["tone"]="blue",eventQuarter?:string)=>{const demandId=detail.match(/DEV-\d+/)?.[0];const demand=rows.find((d)=>d.id===demandId);setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}),title,actor:"Vagner Moraes",detail,tone,product:demand?.product,quarter:eventQuarter,demandId,demandName:demand?.name},...current])};
+  const createVersion = () => {
+    const entries = roadmap.filter((entry) => entry.quarter === quarter);
+    const demandIds = new Set(entries.map((entry) => entry.demandId));
+    const version = Math.max(0, ...versions.map((item) => item.version)) + 1;
+    setVersions((current) => [...current, {
+      id: Date.now(), version, quarter,
+      createdAt: new Date().toLocaleString("pt-BR"),
+      entries: structuredClone(entries),
+      demands: structuredClone(rows.filter((demand) => demandIds.has(demand.id))),
+    }]);
+    setHistory((current) => [{id:Date.now(),date:new Date().toLocaleString("pt-BR"),title:`Versão V${version} do Roadmap criada`,actor:"Vagner Moraes",detail:`Snapshot de ${entries.length} demanda(s) preservado para ${quarter}`,tone:"good",quarter},...current]);
+  };
   const add = (id: string) => {
     setRoadmap((current) => [
       ...current,
@@ -768,11 +793,7 @@ function Roadmap() {
       <PageHead
         title="Roadmap trimestral"
         desc="Planeje demandas por quarter e defina os colaboradores responsáveis."
-        action={
-          <button className="primary" onClick={() => setPicker(true)}>
-            <I.ListPlus /> Planejar demanda cadastrada
-          </button>
-        }
+        action={<div className="capacity-actions"><button className="ghost" onClick={createVersion}><I.History /> Criar versão V{Math.max(0,...versions.map((item)=>item.version))+1}</button><button className="primary" onClick={() => setPicker(true)}><I.ListPlus /> Planejar demanda cadastrada</button></div>}
       />
       <div className="roadmap-source">
         <I.Link2 />
@@ -1269,6 +1290,8 @@ function Demands() {
       tone: "bad",
       product: removed.product,
       quarter: roadmap.find((item) => item.demandId === removed.id)?.quarter,
+      demandId: removed.id,
+      demandName: removed.name,
     }, ...current]);
     setRemoving(null);
   };
@@ -2623,7 +2646,29 @@ function LegacyChanges() {
     </>
   );
 }
-function Changes(){const {history}=useDemands();const {products}=useProducts();const [product,setProduct]=useState("Todos");const [quarter,setQuarter]=useState("Todos");const filtered=history.filter((item)=>(product==="Todos"||item.product===product)&&(quarter==="Todos"||item.quarter===quarter));return <><PageHead title="Mudanças do roadmap" desc="Histórico automático de inclusões, movimentações, remoções e alocações."/><div className="changes-filters"><div><I.Filter/><span><b>Filtrar histórico</b><small>{filtered.length} de {history.length} alterações</small></span></div><label>Produto<select value={product} onChange={(e)=>setProduct(e.target.value)}><option>Todos</option>{products.map((item)=><option key={item.id} value={item.name}>{item.name}</option>)}</select></label><label>Quarter<select value={quarter} onChange={(e)=>setQuarter(e.target.value)}><option value="Todos">Quarter</option>{quarters.map((item)=><option key={item}>{item}</option>)}</select></label>{(product!=="Todos"||quarter!=="Todos")&&<button onClick={()=>{setProduct("Todos");setQuarter("Todos")}}><I.X/> Limpar</button>}</div><Card>{filtered.length===0?<div className="changes-empty"><I.History/><b>Nenhuma alteração encontrada</b><span>{history.length?"Altere ou limpe os filtros para visualizar outros registros.":"As ações realizadas no Roadmap aparecerão automaticamente aqui."}</span></div>:filtered.map((item)=><div className="change" key={item.id}><div className={`changeicon log-${item.tone}`}>{item.tone==="good"?<I.Plus/>:item.tone==="bad"?<I.Trash2/>:item.tone==="warn"?<I.ArrowRightLeft/>:<I.Users/>}</div><div><small>{item.date}</small><b>{item.title}</b><span>por {item.actor}{item.product?` · ${item.product}`:""}{item.quarter?` · ${item.quarter}`:""}</span></div><Badge tone={item.tone}>{item.detail}</Badge></div>)}</Card></>}
+function RoadmapComparison(){
+  const {rows,roadmap,versions}=useDemands();
+  const versionedQuarters=Array.from(new Set(versions.map((item)=>item.quarter)));
+  const [quarter,setQuarter]=useState(versionedQuarters[0]||"Q3 2026");
+  const quarterVersions=versions.filter((item)=>item.quarter===quarter).sort((a,b)=>a.version-b.version);
+  const baseline=quarterVersions[0];
+  const currentEntries=roadmap.filter((item)=>item.quarter===quarter);
+  const initialIds=new Set(baseline?.entries.map((item)=>item.demandId)||[]);
+  const currentIds=new Set(currentEntries.map((item)=>item.demandId));
+  const comparison=Array.from(new Set([...initialIds,...currentIds])).map((id)=>{
+    const initialEntry=baseline?.entries.find((item)=>item.demandId===id);
+    const currentEntry=currentEntries.find((item)=>item.demandId===id);
+    const demand=rows.find((item)=>item.id===id)||baseline?.demands.find((item)=>item.id===id);
+    const status=!initialEntry?"Adicionada":!currentEntry?"Removida":JSON.stringify(initialEntry.allocations)!==JSON.stringify(currentEntry.allocations)?"Ajustada":"Mantida";
+    return {id,demand,initialEntry,currentEntry,status};
+  });
+  return <><PageHead title="Comparação do Roadmap" desc="Compare o primeiro planejamento preservado com a versão atualmente em execução."/>
+    <div className="changes-filters"><div><I.GitCompareArrows/><span><b>Baseline versus execução</b><small>{baseline?`V${baseline.version} criada em ${baseline.createdAt}`:"Crie a primeira versão no Roadmap"}</small></span></div><label>Quarter<select value={quarter} onChange={(e)=>setQuarter(e.target.value)}>{(versionedQuarters.length?versionedQuarters:quarters).map((item)=><option key={item}>{item}</option>)}</select></label></div>
+    {!baseline?<Card><div className="changes-empty"><I.History/><b>Nenhuma versão inicial registrada</b><span>Acesse o Roadmap trimestral e clique em “Criar versão” para preservar o primeiro planejamento.</span></div></Card>:<><div className="kpis compact"><Card><span>Versão inicial</span><strong>V{baseline.version}</strong><small>{baseline.entries.length} demandas</small></Card><Card><span>Em execução</span><strong>{currentEntries.length}</strong><small>demandas atuais</small></Card><Card><span>Novas demandas</span><strong>{comparison.filter((item)=>item.status==="Adicionada").length}</strong><small>após o planejamento</small></Card><Card><span>Removidas/ajustadas</span><strong>{comparison.filter((item)=>["Removida","Ajustada"].includes(item.status)).length}</strong><small>mudanças identificadas</small></Card></div><Card><div className="tablewrap"><table><thead><tr><th>Demanda</th><th>Produto</th><th>Versão inicial</th><th>Em execução</th><th>Comparação</th></tr></thead><tbody>{comparison.map((item)=><tr key={item.id}><td><b>{item.demand?.name||item.id}</b><small>{item.id}</small></td><td>{item.demand?.product||"—"}</td><td>{item.initialEntry?`${item.initialEntry.allocations.reduce((sum,a)=>sum+a.hours,0)}h alocadas`:"Não constava"}</td><td>{item.currentEntry?`${item.currentEntry.allocations.reduce((sum,a)=>sum+a.hours,0)}h alocadas`:"Removida"}</td><td><Badge tone={item.status==="Adicionada"?"good":item.status==="Removida"?"bad":item.status==="Ajustada"?"warn":"gray"}>{item.status}</Badge></td></tr>)}</tbody></table></div></Card></>}
+  </>;
+}
+
+function Changes(){const {history,rows}=useDemands();const {products}=useProducts();const [product,setProduct]=useState("Todos");const [quarter,setQuarter]=useState("Todos");const filtered=history.filter((item)=>(product==="Todos"||item.product===product)&&(quarter==="Todos"||item.quarter===quarter));return <><PageHead title="Mudanças do roadmap" desc="Histórico automático de inclusões, movimentações, remoções e alocações."/><div className="changes-filters"><div><I.Filter/><span><b>Filtrar histórico</b><small>{filtered.length} de {history.length} alterações</small></span></div><label>Produto<select value={product} onChange={(e)=>setProduct(e.target.value)}><option>Todos</option>{products.map((item)=><option key={item.id} value={item.name}>{item.name}</option>)}</select></label><label>Quarter<select value={quarter} onChange={(e)=>setQuarter(e.target.value)}><option value="Todos">Quarter</option>{quarters.map((item)=><option key={item}>{item}</option>)}</select></label>{(product!=="Todos"||quarter!=="Todos")&&<button onClick={()=>{setProduct("Todos");setQuarter("Todos")}}><I.X/> Limpar</button>}</div><Card>{filtered.length===0?<div className="changes-empty"><I.History/><b>Nenhuma alteração encontrada</b><span>{history.length?"Altere ou limpe os filtros para visualizar outros registros.":"As ações realizadas no Roadmap aparecerão automaticamente aqui."}</span></div>:filtered.map((item)=><div className="change" key={item.id}><div className={`changeicon log-${item.tone}`}>{item.tone==="good"?<I.Plus/>:item.tone==="bad"?<I.Trash2/>:item.tone==="warn"?<I.ArrowRightLeft/>:<I.Users/>}</div><div><small>{item.date}</small><b>{item.title}</b><span>por {item.actor}{item.product?` · ${item.product}`:""}{item.quarter?` · ${item.quarter}`:""}</span>{(item.demandId||item.demandName)&&<span className="change-demand"><I.ListTodo/> Demanda: <b>{item.demandName||rows.find((d)=>d.id===item.demandId)?.name||item.demandId}</b>{item.demandId&&` (${item.demandId})`}</span>}</div><Badge tone={item.tone}>{item.detail}</Badge></div>)}</Card></>}
 function Reports() {
   return (
     <>
@@ -2726,7 +2771,7 @@ function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [cmd, setCmd] = useState(false);
   const [role,setRole]=useState<AccessRole>("Administrador");
-  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Produtos","Capacidade"].includes(name):["Demandas","Roadmap"].includes(name));
+  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade"].includes(name):["Demandas","Roadmap","Comparação"].includes(name));
   useEffect(()=>{if(!allowedNav.some(([name])=>name===page))setPage(role==="Visualização"?"Demandas":"Visão geral")},[role]);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -2809,6 +2854,8 @@ function App() {
             <Dashboard go={setPage} />
           ) : page === "Roadmap" ? (
             <Roadmap />
+          ) : page === "Comparação" ? (
+            <RoadmapComparison />
           ) : page === "Demandas" ? (
             <Demands />
           ) : page === "Produtos" ? (

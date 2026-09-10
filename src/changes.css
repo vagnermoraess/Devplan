@@ -18,3 +18,6 @@
 .changes-filters > button { height: 34px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); font-size: 10px; cursor: pointer; }
 .changes-filters > button svg { width: 13px; }
 @media (max-width: 760px) { .changes-filters { align-items: stretch; flex-direction: column; } .changes-filters select { width: 100%; } }
+.change-demand { display: flex; align-items: center; gap: 4px; margin-top: 5px; color: #246bfd !important; }
+.change-demand svg { width: 12px; height: 12px; }
+.change-demand b { font-size: inherit; }
