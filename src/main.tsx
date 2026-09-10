@@ -1160,7 +1160,7 @@ function Demands() {
   const [productFilter,setProductFilter]=useState("Todos");
   const [quarterFilter,setQuarterFilter]=useState("Todos");
   const [executionFilter,setExecutionFilter]=useState("Todas");
-  const [excludedStatus,setExcludedStatus]=useState("Nenhum");
+  const [statusFilter,setStatusFilter]=useState("Todos");
   const selectedProduct = products.find((product) => product.name === form.product);
   const availableResources = team.filter((person) => person.product === form.product);
   const statusOptions=Array.from(new Set(rows.map((d)=>d.status))).sort();
@@ -1170,7 +1170,7 @@ function Demands() {
     const planning=roadmap.find((item)=>item.demandId===d.id);
     const matchesQuarter=quarterFilter==="Todos"||(quarterFilter==="Planejamento"?!planning:planning?.quarter===quarterFilter);
     const runningToday=Boolean(d.startDate&&d.dueDate&&d.startDate<=today&&d.dueDate>=today);
-    return (d.name+d.id+d.product).toLowerCase().includes(q.toLowerCase())&&(productFilter==="Todos"||d.product===productFilter)&&matchesQuarter&&(executionFilter==="Todas"||runningToday)&&(excludedStatus==="Nenhum"||d.status!==excludedStatus);
+    return (d.name+d.id+d.product).toLowerCase().includes(q.toLowerCase())&&(productFilter==="Todos"||d.product===productFilter)&&matchesQuarter&&(executionFilter==="Todas"||runningToday)&&(statusFilter==="Todos"||d.status===statusFilter);
   });
   const change = (
     e: React.ChangeEvent<
@@ -1319,11 +1319,11 @@ function Demands() {
             onChange={(e) => setQ(e.target.value)}
           />
         </label>
-        <label className="demand-filter"><I.Boxes/><select aria-label="Filtrar por produto" value={productFilter} onChange={(e)=>setProductFilter(e.target.value)}><option>Todos</option>{products.filter((product)=>product.active).map((product)=><option key={product.id} value={product.name}>{product.name}</option>)}</select></label>
-        <label className="demand-filter"><I.CalendarRange/><select aria-label="Filtrar por quarter" value={quarterFilter} onChange={(e)=>setQuarterFilter(e.target.value)}><option>Todos</option><option>Planejamento</option>{quarters.map((quarter)=><option key={quarter}>{quarter}</option>)}</select></label>
-        <label className="demand-filter"><I.Activity/><select aria-label="Filtrar demandas em execução" value={executionFilter} onChange={(e)=>setExecutionFilter(e.target.value)}><option>Todas</option><option value="Em execução hoje">Em execução hoje</option></select></label>
-        <label className="demand-filter"><I.FilterX/><select aria-label="Desconsiderar status" value={excludedStatus} onChange={(e)=>setExcludedStatus(e.target.value)}><option>Nenhum</option>{statusOptions.map((status)=><option key={status} value={status}>Exceto: {status}</option>)}</select></label>
-        {(productFilter!=="Todos"||quarterFilter!=="Todos"||executionFilter!=="Todas"||excludedStatus!=="Nenhum")&&<button onClick={()=>{setProductFilter("Todos");setQuarterFilter("Todos");setExecutionFilter("Todas");setExcludedStatus("Nenhum")}}><I.X/> Limpar</button>}
+        <label className="demand-filter"><I.Boxes/><span>Produto</span><select aria-label="Filtrar por produto" value={productFilter} onChange={(e)=>setProductFilter(e.target.value)}><option value="Todos">Todos os produtos</option>{products.filter((product)=>product.active).map((product)=><option key={product.id} value={product.name}>{product.name}</option>)}</select></label>
+        <label className="demand-filter"><I.CalendarRange/><span>Quarter</span><select aria-label="Filtrar por quarter" value={quarterFilter} onChange={(e)=>setQuarterFilter(e.target.value)}><option value="Todos">Todos os quarters</option><option>Planejamento</option>{quarters.map((quarter)=><option key={quarter}>{quarter}</option>)}</select></label>
+        <label className="demand-filter"><I.Activity/><span>Período</span><select aria-label="Filtrar demandas em execução" value={executionFilter} onChange={(e)=>setExecutionFilter(e.target.value)}><option>Todas</option><option value="Em execução hoje">Em execução hoje</option></select></label>
+        <label className="demand-filter"><I.ListFilter/><span>Status</span><select aria-label="Filtrar por status" value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)}><option value="Todos">Todos os status</option>{statusOptions.map((status)=><option key={status} value={status}>{status}</option>)}</select></label>
+        {(productFilter!=="Todos"||quarterFilter!=="Todos"||executionFilter!=="Todas"||statusFilter!=="Todos")&&<button onClick={()=>{setProductFilter("Todos");setQuarterFilter("Todos");setExecutionFilter("Todas");setStatusFilter("Todos")}}><I.X/> Limpar</button>}
         <button onClick={()=>fileRef.current?.click()} disabled={importing}>
           {importing?<I.LoaderCircle className="spin"/>:<I.FileSpreadsheet/>} {importing?"Importando...":"Importar Excel"}
         </button>

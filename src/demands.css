@@ -10,6 +10,7 @@
   color: var(--muted);
 }
 .demand-filter svg { width: 14px; }
+.demand-filter > span { color: var(--muted); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .35px; }
 .demand-filter select {
   max-width: 140px;
   border: 0;
