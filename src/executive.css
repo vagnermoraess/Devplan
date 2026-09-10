@@ -1,0 +1,25 @@
+.executive-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; padding: 12px 15px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); }
+.executive-controls > div:first-child { display: flex; align-items: center; gap: 9px; flex: 1; }
+.executive-controls svg { width: 16px; color: #246bfd; }
+.executive-controls span { display: flex; flex-direction: column; gap: 2px; }
+.executive-controls b { font-size: 11px; }
+.executive-controls small { color: var(--muted); font-size: 9px; }
+.executive-controls label { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; font-weight: 700; }
+.executive-controls select { min-width: 170px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); color: inherit; }
+.week-navigation { display: flex; gap: 5px; }
+.week-navigation button { height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: inherit; cursor: pointer; }
+.week-navigation button svg { width: 13px; }
+.executive-week-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 15px; }
+.executive-list { display: flex; flex-direction: column; gap: 8px; }
+.executive-demand { padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--soft); }
+.executive-demand > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.executive-demand > div:nth-child(2) { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 10px; }
+.executive-demand > div:nth-child(2) .mini { flex: 1; }
+.executive-demand b { font-size: 11px; }
+.executive-demand small { color: var(--muted); font-size: 9px; }
+.executive-demand footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.executive-demand footer > span { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 9px; }
+.executive-demand footer svg { width: 12px; }
+.executive-empty { min-height: 120px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--muted); font-size: 10px; text-align: center; }
+.executive-empty svg { width: 25px; }
+@media (max-width: 850px) { .executive-controls { align-items: stretch; flex-direction: column; } .executive-controls label { justify-content: space-between; } .executive-week-grid { grid-template-columns: 1fr; } }

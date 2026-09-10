@@ -28,6 +28,7 @@ import "./dashboard.css";
 import "./capacity.css";
 import "./changes.css";
 import "./demands.css";
+import "./executive.css";
 
 function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
   const [value, setValue] = useState<T>(() => {
@@ -55,6 +56,7 @@ function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
 
 type Page =
   | "Visão geral"
+  | "Visão executiva"
   | "Roadmap"
   | "Comparação"
   | "Demandas"
@@ -295,6 +297,7 @@ const members = [
 ];
 const nav: [Page, any][] = [
   ["Visão geral", I.LayoutDashboard],
+  ["Visão executiva", I.Presentation],
   ["Demandas", I.ListTodo],
   ["Roadmap", I.Map],
   ["Comparação", I.GitCompareArrows],
@@ -633,6 +636,34 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
       </div>
     </>
   );
+}
+
+function ExecutiveView() {
+  const { rows } = useDemands();
+  const { products } = useProducts();
+  const [product, setProduct] = useState("Todos");
+  const [weekOffset, setWeekOffset] = useState(0);
+  const base = new Date();
+  const day = base.getDay() || 7;
+  const monday = new Date(base.getFullYear(), base.getMonth(), base.getDate() - day + 1 + weekOffset * 7);
+  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+  const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+  const start = iso(monday), end = iso(sunday);
+  const scoped = product === "Todos" ? rows : rows.filter((demand) => demand.product === product);
+  const isDone = (demand: Demand) => demand.progress === 100 || ["Concluído", "Concluída"].includes(demand.status);
+  const delivered = scoped.filter(isDone);
+  const overlapsWeek = (demand: Demand) => Boolean(demand.startDate && demand.dueDate && demand.startDate <= end && demand.dueDate >= start);
+  const planned = scoped.filter((demand) => !isDone(demand) && overlapsWeek(demand) && (demand.progress === 0 || ["Backlog", "Planejada"].includes(demand.status)));
+  const plannedIds = new Set(planned.map((demand) => demand.id));
+  const executing = scoped.filter((demand) => !isDone(demand) && overlapsWeek(demand) && !plannedIds.has(demand.id));
+  const format = (date: Date) => date.toLocaleDateString("pt-BR", {day:"2-digit",month:"short"}).replace(".","");
+  const DemandExecutiveCard = ({ demand }: { demand: Demand }) => <div className="executive-demand"><div><b>{demand.name}</b><small>{demand.id} · {demand.product}</small></div><div><span>{demand.progress}%</span><div className="mini"><i style={{width:`${demand.progress}%`}}/></div></div><footer><span><I.CalendarDays/>{demand.startDate ? new Date(demand.startDate+"T12:00:00").toLocaleDateString("pt-BR") : "Sem início"} — {demand.dueDate ? new Date(demand.dueDate+"T12:00:00").toLocaleDateString("pt-BR") : "Sem prazo"}</span><Badge tone={demand.status.includes("Bloqueada")?"bad":"blue"}>{demand.status}</Badge></footer></div>;
+  return <><PageHead title="Visão executiva" desc="Acompanhe entregas e compromissos semanais do time."/>
+    <div className="executive-controls"><div><I.CalendarRange/><span><b>Semana acompanhada</b><small>{format(monday)} a {format(sunday)}</small></span></div><div className="week-navigation"><button onClick={()=>setWeekOffset((value)=>value-1)} title="Semana anterior"><I.ChevronLeft/></button><button onClick={()=>setWeekOffset(0)}>Semana atual</button><button onClick={()=>setWeekOffset((value)=>value+1)} title="Próxima semana"><I.ChevronRight/></button></div><label><I.Boxes/><span>Produto</span><select value={product} onChange={(e)=>setProduct(e.target.value)}><option value="Todos">Todos os produtos</option>{products.filter((item)=>item.active).map((item)=><option key={item.id}>{item.name}</option>)}</select></label></div>
+    <div className="kpis compact"><Card><span>Entregues</span><strong>{delivered.length}</strong><small>em todo o histórico</small></Card><Card><span>Em execução</span><strong>{executing.length}</strong><small>na semana selecionada</small></Card><Card><span>Planejadas</span><strong>{planned.length}</strong><small>na semana selecionada</small></Card><Card><span>Esforço semanal</span><strong>{[...executing,...planned].reduce((sum,demand)=>sum+demand.effort,0)}h</strong><small>{product==="Todos"?"todos os produtos":product}</small></Card></div>
+    <div className="executive-week-grid"><Card><div className="cardhead"><div><h3>Em execução na semana</h3><p>Demandas ativas entre {format(monday)} e {format(sunday)}</p></div><Badge tone="blue">{executing.length}</Badge></div><div className="executive-list">{executing.length?executing.map((demand)=><DemandExecutiveCard key={demand.id} demand={demand}/>):<div className="executive-empty"><I.CalendarX/><span>Nenhuma demanda em execução nesta semana.</span></div>}</div></Card><Card><div className="cardhead"><div><h3>Planejadas para a semana</h3><p>Demandas ainda não iniciadas no período</p></div><Badge tone="gray">{planned.length}</Badge></div><div className="executive-list">{planned.length?planned.map((demand)=><DemandExecutiveCard key={demand.id} demand={demand}/>):<div className="executive-empty"><I.CalendarX/><span>Nenhuma demanda planejada nesta semana.</span></div>}</div></Card></div>
+    <Card><div className="cardhead"><div><h3>Demandas entregues</h3><p>Todas as entregas concluídas {product==="Todos"?"":"do produto "+product}</p></div><Badge tone="good">{delivered.length} entregues</Badge></div>{delivered.length?<DemandTableRows rows={delivered}/>:<div className="executive-empty"><I.CircleCheck/><span>Nenhuma demanda entregue neste escopo.</span></div>}</Card>
+  </>;
 }
 
 function DemandTable({ compact = false }: { compact?: boolean }) {
@@ -2787,7 +2818,7 @@ function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [cmd, setCmd] = useState(false);
   const [role,setRole]=useState<AccessRole>("Administrador");
-  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade"].includes(name):["Demandas","Roadmap","Comparação"].includes(name));
+  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Visão executiva","Demandas","Roadmap","Comparação","Produtos","Capacidade"].includes(name):["Visão executiva","Demandas","Roadmap","Comparação"].includes(name));
   useEffect(()=>{if(!allowedNav.some(([name])=>name===page))setPage(role==="Visualização"?"Demandas":"Visão geral")},[role]);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -2867,6 +2898,8 @@ function App() {
         <div className="content">
           {page === "Visão geral" ? (
             <Dashboard go={setPage} />
+          ) : page === "Visão executiva" ? (
+            <ExecutiveView />
           ) : page === "Roadmap" ? (
             <Roadmap />
           ) : page === "Comparação" ? (
