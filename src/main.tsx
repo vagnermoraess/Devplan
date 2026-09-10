@@ -61,7 +61,7 @@ type Page =
   | "Produtos"
   | "Capacidade"
   | "Planejamento"
-  | "Mudanças"
+  | "Auditoria"
   | "Relatórios"
   | "Configurações"
   | "Usuários";
@@ -301,7 +301,7 @@ const nav: [Page, any][] = [
   ["Produtos", I.Boxes],
   ["Capacidade", I.Users],
   ["Planejamento", I.CalendarRange],
-  ["Mudanças", I.GitCompareArrows],
+  ["Auditoria", I.ClipboardCheck],
   ["Relatórios", I.BarChart3],
   ["Configurações", I.Settings],
   ["Usuários", I.UserCog],
@@ -2674,7 +2674,17 @@ function RoadmapComparison(){
   </>;
 }
 
-function Changes(){const {history,rows}=useDemands();const {products}=useProducts();const [product,setProduct]=useState("Todos");const [quarter,setQuarter]=useState("Todos");const filtered=history.filter((item)=>(product==="Todos"||item.product===product)&&(quarter==="Todos"||item.quarter===quarter));return <><PageHead title="Mudanças do roadmap" desc="Histórico automático de inclusões, movimentações, remoções e alocações."/><div className="changes-filters"><div><I.Filter/><span><b>Filtrar histórico</b><small>{filtered.length} de {history.length} alterações</small></span></div><label>Produto<select value={product} onChange={(e)=>setProduct(e.target.value)}><option>Todos</option>{products.map((item)=><option key={item.id} value={item.name}>{item.name}</option>)}</select></label><label>Quarter<select value={quarter} onChange={(e)=>setQuarter(e.target.value)}><option value="Todos">Quarter</option>{quarters.map((item)=><option key={item}>{item}</option>)}</select></label>{(product!=="Todos"||quarter!=="Todos")&&<button onClick={()=>{setProduct("Todos");setQuarter("Todos")}}><I.X/> Limpar</button>}</div><Card>{filtered.length===0?<div className="changes-empty"><I.History/><b>Nenhuma alteração encontrada</b><span>{history.length?"Altere ou limpe os filtros para visualizar outros registros.":"As ações realizadas no Roadmap aparecerão automaticamente aqui."}</span></div>:filtered.map((item)=><div className="change" key={item.id}><div className={`changeicon log-${item.tone}`}>{item.tone==="good"?<I.Plus/>:item.tone==="bad"?<I.Trash2/>:item.tone==="warn"?<I.ArrowRightLeft/>:<I.Users/>}</div><div><small>{item.date}</small><b>{item.title}</b><span>por {item.actor}{item.product?` · ${item.product}`:""}{item.quarter?` · ${item.quarter}`:""}</span>{(item.demandId||item.demandName)&&<span className="change-demand"><I.ListTodo/> Demanda: <b>{item.demandName||rows.find((d)=>d.id===item.demandId)?.name||item.demandId}</b>{item.demandId&&` (${item.demandId})`}</span>}</div><Badge tone={item.tone}>{item.detail}</Badge></div>)}</Card></>}
+function Changes(){
+  const {history,rows,versions}=useDemands();
+  const {products}=useProducts();
+  const [product,setProduct]=useState("Todos");
+  const [quarter,setQuarter]=useState("Todos");
+  const [selectedVersion,setSelectedVersion]=useState<RoadmapVersion|null>(null);
+  const filtered=history.filter((item)=>(product==="Todos"||item.product===product)&&(quarter==="Todos"||item.quarter===quarter));
+  const versionFromLog=(item:ChangeLog)=>{const number=Number(item.title.match(/Versão V(\d+)/)?.[1]);return number?versions.find((version)=>version.version===number&&(!item.quarter||version.quarter===item.quarter)):undefined};
+  return <><PageHead title="Auditoria do Roadmap" desc="Histórico automático de versões, inclusões, movimentações, remoções e alocações."/><div className="changes-filters"><div><I.Filter/><span><b>Filtrar auditoria</b><small>{filtered.length} de {history.length} alterações</small></span></div><label>Produto<select value={product} onChange={(e)=>setProduct(e.target.value)}><option>Todos</option>{products.map((item)=><option key={item.id} value={item.name}>{item.name}</option>)}</select></label><label>Quarter<select value={quarter} onChange={(e)=>setQuarter(e.target.value)}><option value="Todos">Quarter</option>{quarters.map((item)=><option key={item}>{item}</option>)}</select></label>{(product!=="Todos"||quarter!=="Todos")&&<button onClick={()=>{setProduct("Todos");setQuarter("Todos")}}><I.X/> Limpar</button>}</div><Card>{filtered.length===0?<div className="changes-empty"><I.History/><b>Nenhuma alteração encontrada</b><span>{history.length?"Altere ou limpe os filtros para visualizar outros registros.":"As ações realizadas no Roadmap aparecerão automaticamente aqui."}</span></div>:filtered.map((item)=>{const storedVersion=versionFromLog(item);return <div className="change" key={item.id}><div className={`changeicon log-${item.tone}`}>{item.tone==="good"?<I.Plus/>:item.tone==="bad"?<I.Trash2/>:item.tone==="warn"?<I.ArrowRightLeft/>:<I.Users/>}</div><div><small>{item.date}</small>{storedVersion?<button className="audit-version-button" onClick={()=>setSelectedVersion(storedVersion)}>{item.title}<I.ExternalLink/></button>:<b>{item.title}</b>}<span>por {item.actor}{item.product?` · ${item.product}`:""}{item.quarter?` · ${item.quarter}`:""}</span>{(item.demandId||item.demandName)&&<span className="change-demand"><I.ListTodo/> Demanda: <b>{item.demandName||rows.find((d)=>d.id===item.demandId)?.name||item.demandId}</b>{item.demandId&&` (${item.demandId})`}</span>}</div><Badge tone={item.tone}>{item.detail}</Badge></div>})}</Card>
+  {selectedVersion&&<div className="overlay confirm-overlay" onMouseDown={()=>setSelectedVersion(null)}><div className="version-detail-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-head"><div><span className="modal-icon"><I.History/></span><div><h2>Roadmap V{selectedVersion.version}</h2><p>{selectedVersion.quarter} · armazenada em {selectedVersion.createdAt}</p></div></div><button className="modal-close" onClick={()=>setSelectedVersion(null)}><I.X/></button></div><div className="version-demand-list">{selectedVersion.entries.length===0?<div className="picker-empty"><I.CalendarX/><b>Versão sem demandas</b></div>:selectedVersion.entries.map((entry)=>{const demand=selectedVersion.demands.find((item)=>item.id===entry.demandId);return <div key={entry.demandId}><span className="demand-dot"/><div><b>{demand?.name||entry.demandId}</b><small>{entry.demandId} · {demand?.product||"Produto não disponível"} · {demand?.status||"Status não disponível"}</small></div><Badge tone="blue">{entry.allocations.reduce((sum,item)=>sum+item.hours,0)}h</Badge></div>})}</div><div className="allocation-total"><span>Total da versão</span><b>{selectedVersion.entries.length} demanda(s) · {selectedVersion.entries.reduce((sum,entry)=>sum+entry.allocations.reduce((hours,item)=>hours+item.hours,0),0)}h</b></div><div className="picker-foot"><button className="primary" onClick={()=>setSelectedVersion(null)}>Fechar</button></div></div></div>}</>;
+}
 function Reports() {
   return (
     <>
@@ -2869,7 +2879,7 @@ function App() {
             <Capacity />
           ) : page === "Planejamento" ? (
             <Planning />
-          ) : page === "Mudanças" ? (
+          ) : page === "Auditoria" ? (
             <Changes />
           ) : page === "Relatórios" ? (
             <Reports />
