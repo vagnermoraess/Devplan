@@ -28,7 +28,6 @@ import "./dashboard.css";
 import "./capacity.css";
 import "./changes.css";
 import "./demands.css";
-import "./executive.css";
 
 function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
   const [value, setValue] = useState<T>(() => {
@@ -56,7 +55,6 @@ function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
 
 type Page =
   | "Visão geral"
-  | "Visão executiva"
   | "Roadmap"
   | "Comparação"
   | "Demandas"
@@ -297,7 +295,6 @@ const members = [
 ];
 const nav: [Page, any][] = [
   ["Visão geral", I.LayoutDashboard],
-  ["Visão executiva", I.Presentation],
   ["Demandas", I.ListTodo],
   ["Roadmap", I.Map],
   ["Comparação", I.GitCompareArrows],
@@ -2818,7 +2815,7 @@ function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [cmd, setCmd] = useState(false);
   const [role,setRole]=useState<AccessRole>("Administrador");
-  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Visão executiva","Demandas","Roadmap","Comparação","Produtos","Capacidade"].includes(name):["Visão executiva","Demandas","Roadmap","Comparação"].includes(name));
+  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade"].includes(name):["Demandas","Roadmap","Comparação"].includes(name));
   useEffect(()=>{if(!allowedNav.some(([name])=>name===page))setPage(role==="Visualização"?"Demandas":"Visão geral")},[role]);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -2898,8 +2895,6 @@ function App() {
         <div className="content">
           {page === "Visão geral" ? (
             <Dashboard go={setPage} />
-          ) : page === "Visão executiva" ? (
-            <ExecutiveView />
           ) : page === "Roadmap" ? (
             <Roadmap />
           ) : page === "Comparação" ? (
