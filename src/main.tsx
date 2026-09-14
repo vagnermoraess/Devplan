@@ -1166,7 +1166,7 @@ function Demands() {
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState<Demand | null>(null);
   const [quickEditing, setQuickEditing] = useState<Demand | null>(null);
-  const [quickForm, setQuickForm] = useState({ progress: "0", effort: "0", due: "" });
+  const [quickForm, setQuickForm] = useState({ progress: "0", actualEffort: "", due: "" });
   const [quickError, setQuickError] = useState("");
   const [removing, setRemoving] = useState<Demand | null>(null);
   const [viewing, setViewing] = useState<Demand | null>(null);
@@ -1303,22 +1303,22 @@ function Demands() {
   };
   const openQuickEdit = (demand: Demand) => {
     setQuickEditing(demand);
-    setQuickForm({ progress: String(demand.progress), effort: String(demand.effort), due: demand.dueDate || "" });
+    setQuickForm({ progress: String(demand.progress), actualEffort: demand.actualEffort === undefined ? "" : String(demand.actualEffort), due: demand.dueDate || "" });
     setQuickError("");
   };
   const saveQuickEdit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!quickEditing) return;
     const progress = Number(quickForm.progress);
-    const effort = Number(quickForm.effort);
-    if (quickForm.progress.trim() === "" || !Number.isInteger(progress) || progress < 0 || progress > 100 || quickForm.effort.trim() === "" || !Number.isFinite(effort) || effort < 0) {
-      setQuickError("Informe uma evolução de 0 a 100% e um esforço estimado válido.");
+    const actualEffort = Number(quickForm.actualEffort);
+    if (quickForm.progress.trim() === "" || !Number.isInteger(progress) || progress < 0 || progress > 100 || (quickForm.actualEffort.trim() !== "" && (!Number.isFinite(actualEffort) || actualEffort < 0))) {
+      setQuickError("Informe uma evolução de 0 a 100% e um esforço realizado válido.");
       return;
     }
     const due = quickForm.due ? new Date(`${quickForm.due}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "") : quickEditing.dueDate ? "Sem prazo" : quickEditing.due;
     const wasCompleted = ["Concluído", "Concluída"].includes(quickEditing.status);
     setRows(current => current.map(demand => demand.id === quickEditing.id ? {
-      ...demand, progress, effort, due, dueDate: quickForm.due,
+      ...demand, progress, actualEffort: quickForm.actualEffort.trim() === "" ? undefined : actualEffort, due, dueDate: quickForm.due,
       status: progress === 100 ? "Concluído" : wasCompleted ? (progress === 0 ? "Backlog" : "Desenvolvimento") : demand.status,
     } : demand));
     setQuickEditing(null);
@@ -1423,7 +1423,7 @@ function Demands() {
           </div>
         </div>
       )}
-      {quickEditing && <div className="overlay confirm-overlay" onMouseDown={() => setQuickEditing(null)}><form className="demand-summary-modal" onMouseDown={event => event.stopPropagation()} onSubmit={saveQuickEdit}><div className="modal-head"><div><span className="modal-icon"><I.SlidersHorizontal/></span><div><h2>Atualizar evolução e planejamento</h2><p>{quickEditing.name} · {quickEditing.id}</p></div></div><button type="button" className="modal-close" onClick={() => setQuickEditing(null)} aria-label="Fechar"><I.X/></button></div><div className="modal-body"><div className="form-field"><label htmlFor="quickProgress">Evolução da demanda (%)</label><input id="quickProgress" type="number" min="0" max="100" step="1" required value={quickForm.progress} onChange={event => setQuickForm({ ...quickForm, progress: event.target.value })}/></div><div className="form-field"><label htmlFor="quickEffort">Esforço estimado (horas)</label><input id="quickEffort" type="number" min="0" step="0.5" required value={quickForm.effort} onChange={event => setQuickForm({ ...quickForm, effort: event.target.value })}/></div><div className="form-field wide"><label htmlFor="quickDue">Prazo desejado</label><input id="quickDue" type="date" value={quickForm.due} onChange={event => setQuickForm({ ...quickForm, due: event.target.value })}/></div>{quickError && <p className="auth-error" role="alert">{quickError}</p>}</div><div className="modal-actions"><button type="button" className="ghost" onClick={() => setQuickEditing(null)}>Cancelar</button><button type="submit" className="primary"><I.Save/> Salvar alterações</button></div></form></div>}
+      {quickEditing && <div className="overlay confirm-overlay" onMouseDown={() => setQuickEditing(null)}><form className="demand-summary-modal" onMouseDown={event => event.stopPropagation()} onSubmit={saveQuickEdit}><div className="modal-head"><div><span className="modal-icon"><I.SlidersHorizontal/></span><div><h2>Atualizar evolução e planejamento</h2><p>{quickEditing.name} · {quickEditing.id}</p></div></div><button type="button" className="modal-close" onClick={() => setQuickEditing(null)} aria-label="Fechar"><I.X/></button></div><div className="modal-body"><div className="form-field"><label htmlFor="quickProgress">Evolução da demanda (%)</label><input id="quickProgress" type="number" min="0" max="100" step="1" required value={quickForm.progress} onChange={event => setQuickForm({ ...quickForm, progress: event.target.value })}/></div><div className="form-field"><label htmlFor="quickActualEffort">Esforço realizado (horas)</label><input id="quickActualEffort" type="number" min="0" step="0.5" value={quickForm.actualEffort} onChange={event => setQuickForm({ ...quickForm, actualEffort: event.target.value })}/></div><div className="form-field wide"><label htmlFor="quickDue">Prazo desejado</label><input id="quickDue" type="date" value={quickForm.due} onChange={event => setQuickForm({ ...quickForm, due: event.target.value })}/></div>{quickError && <p className="auth-error" role="alert">{quickError}</p>}</div><div className="modal-actions"><button type="button" className="ghost" onClick={() => setQuickEditing(null)}>Cancelar</button><button type="submit" className="primary"><I.Save/> Salvar alterações</button></div></form></div>}
       {modal && (
         <div className="overlay demand-overlay" onMouseDown={close}>
           <form
@@ -1773,7 +1773,7 @@ function DemandTableRows({
               {onEdit && (
                 <td>
                   <div className="row-actions">
-                    {onQuickEdit && <button title="Atualizar evolução, esforço e prazo" aria-label={`Atualizar evolução, esforço e prazo de ${d.id}`} onClick={() => onQuickEdit(d)}><I.SlidersHorizontal/></button>}
+                    {onQuickEdit && <button title="Atualizar evolução, esforço realizado e prazo" aria-label={`Atualizar evolução, esforço realizado e prazo de ${d.id}`} onClick={() => onQuickEdit(d)}><I.SlidersHorizontal/></button>}
                     <button
                       title="Editar demanda"
                       aria-label={`Editar ${d.id}`}
