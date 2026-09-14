@@ -762,12 +762,12 @@ function Roadmap() {
     setHistory((current) => [{id:Date.now(),date:new Date().toLocaleString("pt-BR"),title:`Versão V${version} do Roadmap criada`,actor:"Vagner Moraes",detail:`Snapshot de ${entries.length} demanda(s) preservado para ${quarter}`,tone:"good",quarter},...current]);
   };
   const add = (id: string) => {
-    setRoadmap((current) => [
+    if (roadmap.some(item => item.demandId === id)) return;
+    setRoadmap((current) => current.some(item => item.demandId === id) ? current : [
       ...current,
       { demandId: id, quarter, collaborators: [], allocations: [] },
     ]);
     register("Demanda adicionada ao roadmap",`${id} planejada em ${quarter}`,"good",quarter);
-    setPicker(false);
   };
   const move = (id: string, destination: string) => {
     const origin=roadmap.find((item)=>item.demandId===id)?.quarter;
@@ -868,7 +868,6 @@ function Roadmap() {
       {picker && (
         <div
           className="overlay roadmap-picker-overlay"
-          onMouseDown={() => setPicker(false)}
         >
           <div
             className="roadmap-picker"
@@ -886,7 +885,7 @@ function Roadmap() {
                   </p>
                 </div>
               </div>
-              <button className="modal-close" onClick={() => setPicker(false)}>
+              <button className="modal-close" onClick={() => setPicker(false)} aria-label="Fechar seleção de demandas">
                 <I.X />
               </button>
             </div>
@@ -926,8 +925,8 @@ function Roadmap() {
               )}
             </div>
             <div className="picker-foot">
-              <button className="ghost" onClick={() => setPicker(false)}>
-                Cancelar
+              <button className="primary" onClick={() => setPicker(false)}>
+                Concluir
               </button>
             </div>
           </div>
