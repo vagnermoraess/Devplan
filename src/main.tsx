@@ -28,6 +28,7 @@ import "./dashboard.css";
 import "./capacity.css";
 import "./changes.css";
 import "./demands.css";
+import capacitySeed from "./capacity-seed.json";
 import { ADMIN_EMAIL, Account, AccessRole, hashPassword, loadAccounts, makeAccount, saveAccounts, sessionId, setSession } from "./auth";
 
 function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
@@ -256,14 +257,6 @@ function useDemands() {
   if (!value) throw new Error("DemandProvider ausente");
   return value;
 }
-const members = [
-  ["Marina Costa", "Tech Lead", 130, 118],
-  ["Rafael Lima", "Backend", 130, 125],
-  ["Camila Souza", "Frontend", 130, 102],
-  ["Lucas Rocha", "Backend", 120, 111],
-  ["Bruno Alves", "Full Stack", 130, 88],
-  ["Bianca Melo", "UX Engineer", 110, 76],
-];
 const nav: [Page, any][] = [
   ["Visão geral", I.LayoutDashboard],
   ["Demandas", I.ListTodo],
@@ -1998,21 +1991,39 @@ type Staff = {
   total: number;
   used: number;
 };
-const initialStaff: Staff[] = members.map(([name, role, total, used], i) => ({
-  id: i + 1,
-  name: String(name),
-  role: String(role),
-  product: [
-    "nddMove",
-    "nddCargo",
-    "nddElog",
-    "nddCargo",
-    "nddFrete",
-    "CIOT FÁCIL",
-  ][i],
-  total: Number(total),
-  used: Number(used),
-}));
+const initialStaff: Staff[] = capacitySeed;
+function replaceRegisteredStaff() {
+  try {
+    if (localStorage.getItem("dev-plan:team-spreadsheet-v1")) return;
+    localStorage.setItem("dev-plan:team", JSON.stringify(initialStaff));
+    const demandsRaw = localStorage.getItem("dev-plan:demands");
+    if (demandsRaw) {
+      const storedDemands: Demand[] = JSON.parse(demandsRaw);
+      localStorage.setItem("dev-plan:demands", JSON.stringify(storedDemands.map(demand => ({ ...demand, resourceIds: [] }))));
+    }
+    const roadmapRaw = localStorage.getItem("dev-plan:roadmap");
+    if (roadmapRaw) {
+      const entries: RoadmapEntry[] = JSON.parse(roadmapRaw);
+      localStorage.setItem("dev-plan:roadmap", JSON.stringify(entries.map(entry => ({ ...entry, collaborators: [], allocations: [] }))));
+    }
+    localStorage.setItem("dev-plan:team-spreadsheet-v1", "1");
+  } catch { /* A lista da planilha continua disponível sem armazenamento local. */ }
+}
+replaceRegisteredStaff();
+function correctStaffProductsFromSpreadsheet() {
+  try {
+    if (localStorage.getItem("dev-plan:team-products-v2")) return;
+    const raw = localStorage.getItem("dev-plan:team");
+    const stored: Staff[] = raw ? JSON.parse(raw) : initialStaff;
+    const productByName = new Map(initialStaff.map(person => [person.name, person.product]));
+    localStorage.setItem("dev-plan:team", JSON.stringify(stored.map(person => ({
+      ...person,
+      product: productByName.get(person.name) ?? person.product,
+    }))));
+    localStorage.setItem("dev-plan:team-products-v2", "1");
+  } catch { /* A lista inicial já contém os produtos corrigidos. */ }
+}
+correctStaffProductsFromSpreadsheet();
 const TeamContext = createContext<{
   team: Staff[];
   setTeam: React.Dispatch<React.SetStateAction<Staff[]>>;
@@ -2160,7 +2171,7 @@ function Capacity() {
         action={<div className="capacity-actions"><button className="ghost" onClick={()=>fileRef.current?.click()} disabled={importing}>{importing?<I.LoaderCircle className="spin"/>:<I.FileSpreadsheet/>}{importing?"Importando...":"Importar Excel"}</button><input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={importCapacity}/><button className="primary" onClick={openNew}><I.UserPlus /> Novo colaborador</button></div>}
       />
       {importFeedback&&<div className="import-feedback"><I.CircleCheck/><span>{importFeedback}</span><button onClick={()=>setImportFeedback("")}><I.X/></button></div>}
-      <div className="capacity-filter"><div><I.Boxes/><span><b>Capacidade por produto</b><small>Filtre os indicadores e colaboradores</small></span></div><select value={productFilter} onChange={(e)=>setProductFilter(e.target.value)}><option>Todos</option>{products.filter((product)=>product.active).map((product)=><option key={product.id} value={product.name}>{product.name}</option>)}</select></div>
+      <div className="capacity-filter"><div><I.Boxes/><span><b>Capacidade por produto</b><small>Filtre os indicadores e colaboradores</small></span></div><select value={productFilter} onChange={(e)=>setProductFilter(e.target.value)}><option>Todos</option>{Array.from(new Set([...products.filter(product=>product.active).map(product=>product.name),...team.map(person=>person.product)])).filter(Boolean).map(name=><option key={name} value={name}>{name}</option>)}</select></div>
       <div className="kpis compact">
         <Card>
           <span>Capacidade total</span>
@@ -2303,6 +2314,7 @@ function Capacity() {
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                 >
+                  {form.role && !["Tech Lead","Backend","Frontend","Full Stack","UX Engineer","QA Engineer","Product Manager"].includes(form.role) && <option>{form.role}</option>}
                   <option>Tech Lead</option>
                   <option>Backend</option>
                   <option>Frontend</option>
@@ -2330,6 +2342,7 @@ function Capacity() {
                         {product.name}
                       </option>
                     ))}
+                  {form.product && !products.some(product => product.name === form.product && product.active) && <option value={form.product}>{form.product} (planilha)</option>}
                 </select>
               </div>
               <div className="form-field">
