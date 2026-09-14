@@ -76,6 +76,7 @@ type Demand = {
   status: string;
   priority: string;
   effort: number;
+  actualEffort?: number;
   progress: number;
   due: string;
   risk: string;
@@ -1148,6 +1149,7 @@ const emptyDemandForm = {
   due: "",
   startDate: "",
   effort: "40",
+  actualEffort: "",
   owner: "",
   dependencies: "",
   justification: "",
@@ -1163,6 +1165,9 @@ function Demands() {
   const [modal, setModal] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState<Demand | null>(null);
+  const [quickEditing, setQuickEditing] = useState<Demand | null>(null);
+  const [quickForm, setQuickForm] = useState({ progress: "0", effort: "0", due: "" });
+  const [quickError, setQuickError] = useState("");
   const [removing, setRemoving] = useState<Demand | null>(null);
   const [viewing, setViewing] = useState<Demand | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -1240,6 +1245,7 @@ function Demands() {
       version: d.version || "",
       description: d.notes || "",
       effort: String(d.effort),
+      actualEffort: d.actualEffort === undefined ? "" : String(d.actualEffort),
       owner: d.owner,
       requester: d.owner,
       startDate: d.startDate || "",
@@ -1256,6 +1262,7 @@ function Demands() {
     if (!form.requester.trim()) next.requester = "Informe o solicitante.";
     if (!form.due) next.due = "Informe o prazo desejado.";
     if (Number(form.effort) <= 0) next.effort = "Informe um esforço válido.";
+    if (form.actualEffort !== "" && (!Number.isFinite(Number(form.actualEffort)) || Number(form.actualEffort) < 0)) next.actualEffort = "Informe um esforço realizado válido.";
     setErrors(next);
     if (Object.keys(next).length) return;
     const date = new Date(form.due + "T12:00:00");
@@ -1270,6 +1277,7 @@ function Demands() {
       status: Number(form.progress) === 100 ? "Concluído" : form.status,
       priority: form.priority,
       effort: Number(form.effort),
+      actualEffort: form.actualEffort === "" ? undefined : Number(form.actualEffort),
       progress: Math.min(100, Math.max(0, Number(form.progress) || 0)),
       due,
       dueDate: form.due,
@@ -1290,6 +1298,30 @@ function Demands() {
       setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR"),title:"Demanda planejada no cadastro",actor:"Vagner Moraes",detail:`${data.id} incluída em ${form.planningQuarter}`,tone:"good",product:data.product,quarter:form.planningQuarter},...current]);
     }
     close();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3500);
+  };
+  const openQuickEdit = (demand: Demand) => {
+    setQuickEditing(demand);
+    setQuickForm({ progress: String(demand.progress), effort: String(demand.effort), due: demand.dueDate || "" });
+    setQuickError("");
+  };
+  const saveQuickEdit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!quickEditing) return;
+    const progress = Number(quickForm.progress);
+    const effort = Number(quickForm.effort);
+    if (quickForm.progress.trim() === "" || !Number.isInteger(progress) || progress < 0 || progress > 100 || quickForm.effort.trim() === "" || !Number.isFinite(effort) || effort < 0) {
+      setQuickError("Informe uma evolução de 0 a 100% e um esforço estimado válido.");
+      return;
+    }
+    const due = quickForm.due ? new Date(`${quickForm.due}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "") : quickEditing.dueDate ? "Sem prazo" : quickEditing.due;
+    const wasCompleted = ["Concluído", "Concluída"].includes(quickEditing.status);
+    setRows(current => current.map(demand => demand.id === quickEditing.id ? {
+      ...demand, progress, effort, due, dueDate: quickForm.due,
+      status: progress === 100 ? "Concluído" : wasCompleted ? (progress === 0 ? "Backlog" : "Desenvolvimento") : demand.status,
+    } : demand));
+    setQuickEditing(null);
     setSaved(true);
     setTimeout(() => setSaved(false), 3500);
   };
@@ -1362,6 +1394,7 @@ function Demands() {
           rows={filtered}
           onView={setViewing}
           onEdit={openEdit}
+          onQuickEdit={openQuickEdit}
           onRemove={setRemoving}
         />
       </Card>
@@ -1380,6 +1413,7 @@ function Demands() {
               <div><span>Data de início</span><b>{viewing.startDate ? new Date(viewing.startDate + "T12:00:00").toLocaleDateString("pt-BR") : "Não informada"}</b></div>
               <div><span>Prazo desejado</span><b>{viewing.dueDate ? new Date(viewing.dueDate + "T12:00:00").toLocaleDateString("pt-BR") : viewing.due}</b></div>
               <div><span>Esforço estimado</span><b>{viewing.effort}h</b></div>
+              <div><span>Esforço realizado</span><b>{viewing.actualEffort === undefined ? "Não informado" : `${viewing.actualEffort}h`}</b></div>
               <div><span>Evolução</span><b>{viewing.progress}%</b></div>
               <div><span>Quarter</span><b>{roadmap.find((item) => item.demandId === viewing.id)?.quarter || "Planejamento"}</b></div>
               <div className="wide"><span>Recursos</span><b>{(viewing.resourceIds || []).map((id) => team.find((person) => person.id === id)?.name).filter(Boolean).join(", ") || "Nenhum recurso alocado"}</b></div>
@@ -1389,6 +1423,7 @@ function Demands() {
           </div>
         </div>
       )}
+      {quickEditing && <div className="overlay confirm-overlay" onMouseDown={() => setQuickEditing(null)}><form className="demand-summary-modal" onMouseDown={event => event.stopPropagation()} onSubmit={saveQuickEdit}><div className="modal-head"><div><span className="modal-icon"><I.SlidersHorizontal/></span><div><h2>Atualizar evolução e planejamento</h2><p>{quickEditing.name} · {quickEditing.id}</p></div></div><button type="button" className="modal-close" onClick={() => setQuickEditing(null)} aria-label="Fechar"><I.X/></button></div><div className="modal-body"><div className="form-field"><label htmlFor="quickProgress">Evolução da demanda (%)</label><input id="quickProgress" type="number" min="0" max="100" step="1" required value={quickForm.progress} onChange={event => setQuickForm({ ...quickForm, progress: event.target.value })}/></div><div className="form-field"><label htmlFor="quickEffort">Esforço estimado (horas)</label><input id="quickEffort" type="number" min="0" step="0.5" required value={quickForm.effort} onChange={event => setQuickForm({ ...quickForm, effort: event.target.value })}/></div><div className="form-field wide"><label htmlFor="quickDue">Prazo desejado</label><input id="quickDue" type="date" value={quickForm.due} onChange={event => setQuickForm({ ...quickForm, due: event.target.value })}/></div>{quickError && <p className="auth-error" role="alert">{quickError}</p>}</div><div className="modal-actions"><button type="button" className="ghost" onClick={() => setQuickEditing(null)}>Cancelar</button><button type="submit" className="primary"><I.Save/> Salvar alterações</button></div></form></div>}
       {modal && (
         <div className="overlay demand-overlay" onMouseDown={close}>
           <form
@@ -1560,6 +1595,7 @@ function Demands() {
                   <small className="field-error">{errors.effort}</small>
                 )}
               </div>
+              <div className="form-field"><label htmlFor="actualEffort">Esforço realizado (horas)</label><input id="actualEffort" type="number" min="0" step="0.5" name="actualEffort" value={form.actualEffort} onChange={change} placeholder="Ainda não informado" className={errors.actualEffort ? "invalid" : ""}/>{errors.actualEffort && <small className="field-error">{errors.actualEffort}</small>}</div>
               <div className="form-field wide">
                 <label>Dependências</label>
                 <input
@@ -1661,11 +1697,13 @@ function DemandTableRows({
   rows,
   onView,
   onEdit,
+  onQuickEdit,
   onRemove,
 }: {
   rows: Demand[];
   onView?: (d: Demand) => void;
   onEdit?: (d: Demand) => void;
+  onQuickEdit?: (d: Demand) => void;
   onRemove?: (d: Demand) => void;
 }) {
   return (
@@ -1735,6 +1773,7 @@ function DemandTableRows({
               {onEdit && (
                 <td>
                   <div className="row-actions">
+                    {onQuickEdit && <button title="Atualizar evolução, esforço e prazo" aria-label={`Atualizar evolução, esforço e prazo de ${d.id}`} onClick={() => onQuickEdit(d)}><I.SlidersHorizontal/></button>}
                     <button
                       title="Editar demanda"
                       aria-label={`Editar ${d.id}`}
@@ -2867,10 +2906,10 @@ function UsersAdmin({users, currentId, onChange}:{users:Account[];currentId:stri
   return <><PageHead title="Administração de usuários" desc="Cadastre usuários e defina os níveis de acesso ao portal."/><Card><form className="account-form" onSubmit={add}><label>Nome<input required value={name} onChange={e=>setName(e.target.value)} /></label><label>E-mail<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} /></label><label>Senha inicial<input required type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} /></label><label>Perfil<select value={role} onChange={e=>setRole(e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></label><button className="primary" type="submit"><I.UserPlus/> Criar usuário</button></form>{error&&<p className="auth-error" role="alert">{error}</p>}</Card><Card><div className="tablewrap"><table><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Permissões</th><th></th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td><span className="person">{user.name[0]}</span><b>{user.name}</b></td><td>{user.email}</td><td><select className="quarter-inline" value={user.role} disabled={user.id===currentId || user.email===ADMIN_EMAIL} onChange={e=>changeRole(user,e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></td><td>{user.role==="Administrador"?"Acesso total":user.role==="Editor"?"Demandas, produtos, capacidade e roadmap":"Somente demandas e roadmap"}</td><td>{user.id!==currentId && user.email!==ADMIN_EMAIL && <button className="ghost" onClick={()=>remove(user)} aria-label={`Excluir ${user.name}`}><I.Trash2/></button>}</td></tr>)}</tbody></table></div></Card></>;
 }
 
-function Login({hasAccounts,onLogin}:{hasAccounts:boolean;onLogin:(account:Account,accounts?:Account[])=>void}) {
-  const [name,setName]=useState("");const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [error,setError]=useState("");const [busy,setBusy]=useState(false);
-  async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try {if(!hasAccounts){if(password.length<8){setError("Use uma senha com pelo menos 8 caracteres.");return}const account=await makeAccount(name,email,password,"Administrador");onLogin(account,[account]);return}const account=loadAccounts().find(u=>u.email===email.trim().toLowerCase());if(!account || await hashPassword(password,account.salt)!==account.passwordHash){setError("E-mail ou senha inválidos.");return}onLogin(account)}catch{setError("Não foi possível autenticar. Verifique o armazenamento do navegador.")}finally{setBusy(false)}}
-  return <div className="login-screen"><form className="login-card" onSubmit={submit}><div className="login-mark"><I.Waypoints/></div><h1>{hasAccounts?"Entrar no Roadmap":"Criar administrador"}</h1><p>{hasAccounts?"Acesse com seu e-mail e senha.":"Configure o primeiro acesso deste navegador."}</p>{!hasAccounts&&<label>Nome<input required autoComplete="name" value={name} onChange={e=>setName(e.target.value)}/></label>}<label>E-mail<input required type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Senha<input required type="password" minLength={hasAccounts?1:8} autoComplete={hasAccounts?"current-password":"new-password"} value={password} onChange={e=>setPassword(e.target.value)}/></label>{error&&<p className="auth-error" role="alert">{error}</p>}<button className="primary" disabled={busy} type="submit">{busy?"Aguarde...":hasAccounts?"Entrar":"Criar conta e entrar"}</button><small>Os usuários e dados deste protótipo ficam armazenados neste navegador.</small></form></div>
+function Login({hasAccounts,onLogin}:{hasAccounts:boolean;onLogin:(account:Account,remember:boolean,accounts?:Account[])=>void}) {
+  const [name,setName]=useState("");const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [remember,setRemember]=useState(false);const [error,setError]=useState("");const [busy,setBusy]=useState(false);
+  async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try {if(!hasAccounts){if(password.length<8){setError("Use uma senha com pelo menos 8 caracteres.");return}const account=await makeAccount(name,email,password,"Administrador");onLogin(account,remember,[account]);return}const account=loadAccounts().find(u=>u.email===email.trim().toLowerCase());if(!account || await hashPassword(password,account.salt)!==account.passwordHash){setError("E-mail ou senha inválidos.");return}onLogin(account,remember)}catch{setError("Não foi possível autenticar. Verifique o armazenamento do navegador.")}finally{setBusy(false)}}
+  return <div className="login-screen"><form className="login-card" onSubmit={submit}><div className="login-mark"><I.Waypoints/></div><h1>{hasAccounts?"Entrar no nddPlan":"Criar administrador"}</h1><p>{hasAccounts?"Acesse com seu e-mail e senha.":"Configure o primeiro acesso deste navegador."}</p>{!hasAccounts&&<label>Nome<input required autoComplete="name" value={name} onChange={e=>setName(e.target.value)}/></label>}<label>E-mail<input required type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Senha<input required type="password" minLength={hasAccounts?1:8} autoComplete={hasAccounts?"current-password":"new-password"} value={password} onChange={e=>setPassword(e.target.value)}/></label><label className="remember-login"><input type="checkbox" checked={remember} onChange={event=>setRemember(event.target.checked)}/><span>Manter conectado neste navegador</span></label>{error&&<p className="auth-error" role="alert">{error}</p>}<button className="primary" disabled={busy} type="submit">{busy?"Aguarde...":hasAccounts?"Entrar":"Criar conta e entrar"}</button><small>Os usuários e dados deste protótipo ficam armazenados neste navegador.</small></form></div>
 }
 
 function App() {
@@ -2883,7 +2922,7 @@ function App() {
   const [cmd, setCmd] = useState(false);
   const role=activeUser?.role ?? "Visualização";
   function updateAccounts(next:Account[]){saveAccounts(next);setAccounts(next)}
-  function login(account:Account,next?:Account[]){if(next)updateAccounts(next);setSession(account.id);setActiveId(account.id)}
+  function login(account:Account,remember:boolean,next?:Account[]){if(next)updateAccounts(next);setSession(account.id,remember);setActiveId(account.id)}
   function logout(){setSession(null);setActiveId(null);setCmd(false)}
   const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade","Analytics"].includes(name):["Demandas","Roadmap","Comparação","Analytics"].includes(name));
   useEffect(()=>{if(!allowedNav.some(([name])=>name===page))setPage(role==="Visualização"?"Demandas":"Visão geral")},[role]);
@@ -2906,7 +2945,7 @@ function App() {
             <I.Waypoints />
           </span>
           <b>
-            Road<span>map</span>
+            ndd<span>Plan</span>
           </b>
           <button onClick={() => setCollapsed(!collapsed)}>
             <I.PanelLeftClose />

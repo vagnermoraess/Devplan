@@ -3,6 +3,7 @@ export type Account = { id: string; name: string; email: string; role: AccessRol
 
 const USERS_KEY = "roadmap.accounts.v1";
 const SESSION_KEY = "roadmap.session.v1";
+const REMEMBERED_SESSION_KEY = "roadmap.remembered-session.v1";
 const ADMIN_SEED_KEY = "roadmap.admin-seed.v1";
 export const ADMIN_EMAIL = "vagnersmoraes@hotmail.com";
 const initialAdmin: Account = {
@@ -33,10 +34,19 @@ export function saveAccounts(accounts: Account[]) {
   localStorage.setItem(USERS_KEY, JSON.stringify(accounts));
 }
 
-export function sessionId() { return sessionStorage.getItem(SESSION_KEY); }
-export function setSession(id: string | null) {
-  if (id) sessionStorage.setItem(SESSION_KEY, id);
-  else sessionStorage.removeItem(SESSION_KEY);
+export function sessionId() {
+  try { return sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(REMEMBERED_SESSION_KEY); }
+  catch { return null; }
+}
+export function setSession(id: string | null, remember = false) {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(REMEMBERED_SESSION_KEY);
+    if (id) {
+      if (remember) localStorage.setItem(REMEMBERED_SESSION_KEY, id);
+      else sessionStorage.setItem(SESSION_KEY, id);
+    }
+  } catch { /* O login ainda funciona até recarregar a página. */ }
 }
 
 function hex(bytes: Uint8Array) { return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join(""); }
