@@ -380,14 +380,16 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
     return { m, roadmap: roadmapHours, sustentacao, novas: 0, reserva: Math.max(0, monthlyTotal - roadmapHours - sustentacao) };
   });
   const completed = scoped.filter((d) => ["Concluído", "Concluída"].includes(d.status)).length;
-  const critical = scoped.filter((d) => d.risk === "Crítico" || d.risk === "Alto").length;
+  const developmentTeam = scopedTeam.filter(person => ["DEV", "BACKEND", "FRONTEND", "FULL STACK"].includes(person.role.trim().toUpperCase()));
+  const testingTeam = scopedTeam.filter(person => ["QA", "QA ENGINEER"].includes(person.role.trim().toUpperCase()));
+  const developmentCapacity = developmentTeam.reduce((sum, person) => sum + person.total, 0);
+  const testingCapacity = testingTeam.reduce((sum, person) => sum + person.total, 0);
   const progress = scoped.length ? Math.round(scoped.reduce((sum, d) => sum + d.progress, 0) / scoped.length) : 0;
   const kpis = [
     ["Capacidade total", `${totalCapacity}h`, `${utilization}% alocada · ${scopedTeam.length} colaboradores`, utilization > 90 ? "bad" : "blue", I.Users],
     ["Capacidade estimada", `${effort}h`, `${scoped.length} demandas`, "warn", I.Gauge],
     ["Roadmap planejado", String(planned.length), `${completed} concluídas`, "blue", I.Map],
     ["Progresso médio", `${progress}%`, "no escopo atual", "good", I.Crosshair],
-    ["Riscos altos/críticos", String(critical), productFilter === "Todos" ? "visão geral" : productFilter, "bad", I.ShieldAlert],
   ];
   return (
     <>
@@ -418,6 +420,7 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
           </Card>
         ))}
       </div>
+      <Card className="discipline-capacity-card"><div className="cardhead"><div><h3>Capacidade por disciplina</h3><p>Horas cadastradas para o escopo selecionado</p></div></div><div className="discipline-capacity-grid"><div><span><I.Code2/> Capacidade de Desenvolvimento</span><strong>{developmentCapacity}h</strong><small>{developmentTeam.length} colaboradores DEV</small></div><div><span><I.FlaskConical/> Capacidade de Testes</span><strong>{testingCapacity}h</strong><small>{testingTeam.length} colaboradores QA</small></div></div></Card>
       <Card className="product-capacity-card"><div className="cardhead"><div><h3>Capacidade por produto</h3><p>Capacidade cadastrada, alocada e disponível por produto</p></div><Badge tone="gray">{capacityByProduct.length} produto(s)</Badge></div><div className="product-capacity-grid">{capacityByProduct.map((item)=><div className="product-capacity-item" key={item.product}><div><span className="product-mini-icon"><I.Boxes/></span><div><b>{item.product}</b><small>{item.available}h disponíveis</small></div><strong className={item.utilization>90?"bad":""}>{item.utilization}%</strong></div><div className="product-capacity-bar"><i className={item.utilization>90?"over":""} style={{width:Math.min(item.utilization,100)+"%"}}/></div><footer><span>Total <b>{item.total}h</b></span><span>Alocada <b>{item.allocated}h</b></span></footer></div>)}</div></Card>
       <div className="grid2">
         <Card>

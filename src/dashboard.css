@@ -1,6 +1,14 @@
 .dashboard-kpis {
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
+
+.discipline-capacity-card { margin-bottom: 16px; }
+.discipline-capacity-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.discipline-capacity-grid > div { display: flex; flex-direction: column; gap: 7px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); }
+.discipline-capacity-grid span { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+.discipline-capacity-grid svg { width: 17px; height: 17px; color: #246bfd; }
+.discipline-capacity-grid strong { font-size: 27px; }
+.discipline-capacity-grid small { color: var(--muted); font-size: 11px; }
 
 .product-capacity-card { margin-bottom: 16px; }
 .product-capacity-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 11px; }
@@ -26,5 +34,6 @@
 
 @media (max-width: 760px) {
   .dashboard-kpis { grid-template-columns: 1fr; }
+  .discipline-capacity-grid { grid-template-columns: 1fr; }
   .product-capacity-grid { grid-template-columns: 1fr; }
 }
