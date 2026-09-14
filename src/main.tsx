@@ -732,6 +732,7 @@ function Roadmap() {
   const [quarter, setQuarter] = useState("Q3 2026");
   const [productFilter, setProductFilter] = useState("Todos");
   const [picker, setPicker] = useState(false);
+  const [pickerProduct, setPickerProduct] = useState("");
   const [staffFor, setStaffFor] = useState<RoadmapEntry | null>(null);
   const items = roadmap.flatMap((entry) => {
     const demand = rows.find((d) => d.id === entry.demandId);
@@ -740,6 +741,9 @@ function Roadmap() {
   const available = rows.filter(
     (d) => !roadmap.some((r) => r.demandId === d.id),
   );
+  const availableForProduct = available.filter(demand => demand.product === pickerProduct);
+  const pickerProducts = Array.from(new Set([...products.filter(product => product.active).map(product => product.name), ...available.map(demand => demand.product)]));
+  const openPicker = () => { setPickerProduct(productFilter === "Todos" ? "" : productFilter); setPicker(true); };
   const months = quarterMonths[quarter.slice(0, 2)];
   const register=(title:string,detail:string,tone:ChangeLog["tone"]="blue",eventQuarter?:string)=>{const demandId=detail.match(/DEV-\d+/)?.[0];const demand=rows.find((d)=>d.id===demandId);setHistory((current)=>[{id:Date.now(),date:new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}),title,actor:"Vagner Moraes",detail,tone,product:demand?.product,quarter:eventQuarter,demandId,demandName:demand?.name},...current])};
   const createVersion = () => {
@@ -790,7 +794,7 @@ function Roadmap() {
       <PageHead
         title="Roadmap trimestral"
         desc="Planeje demandas por quarter e defina os colaboradores responsáveis."
-        action={<div className="capacity-actions"><button className="ghost" onClick={createVersion}><I.History /> Criar versão V{Math.max(0,...versions.map((item)=>item.version))+1}</button><button className="primary" onClick={() => setPicker(true)}><I.ListPlus /> Planejar demanda cadastrada</button></div>}
+        action={<div className="capacity-actions"><button className="ghost" onClick={createVersion}><I.History /> Criar versão V{Math.max(0,...versions.map((item)=>item.version))+1}</button><button className="primary" onClick={openPicker}><I.ListPlus /> Planejar demanda cadastrada</button></div>}
       />
       <div className="roadmap-source">
         <I.Link2 />
@@ -838,7 +842,7 @@ function Roadmap() {
           <p>
             Planeje uma demanda cadastrada ou mova uma demanda de outro quarter.
           </p>
-          <button className="primary" onClick={() => setPicker(true)}>
+          <button className="primary" onClick={openPicker}>
             <I.ListPlus /> Selecionar demanda
           </button>
         </Card>
@@ -883,19 +887,27 @@ function Roadmap() {
                 <I.X />
               </button>
             </div>
+            <label className="roadmap-picker-product">Produto
+              <select value={pickerProduct} onChange={event => setPickerProduct(event.target.value)}>
+                <option value="">Selecione um produto...</option>
+                {pickerProducts.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
             <div className="picker-list">
-              {available.length === 0 ? (
+              {!pickerProduct ? (
+                <div className="picker-empty"><I.Boxes/><b>Selecione um produto</b><span>As demandas disponíveis aparecerão aqui.</span></div>
+              ) : availableForProduct.length === 0 ? (
                 <div className="picker-empty">
                   <I.CircleCheck />
-                  <b>Todas as demandas já estão planejadas</b>
+                  <b>Nenhuma demanda disponível para {pickerProduct}</b>
                   <span>
-                    Cadastre uma nova demanda para disponibilizá-la aqui.
+                    Cadastre uma demanda ou escolha outro produto.
                   </span>
                 </div>
               ) : (
-                available.map((d) => (
+                availableForProduct.map((d) => (
                   <button key={d.id} onClick={() => add(d.id)}>
-                    <span className="person">{d.owner[0]}</span>
+                    <span className="person">{d.owner?.[0] || d.name[0]}</span>
                     <div>
                       <b>{d.name}</b>
                       <small>
