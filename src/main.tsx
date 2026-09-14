@@ -28,6 +28,7 @@ import "./dashboard.css";
 import "./capacity.css";
 import "./changes.css";
 import "./demands.css";
+import { Account, AccessRole, hashPassword, loadAccounts, makeAccount, saveAccounts, sessionId, setSession } from "./auth";
 
 function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
   const [value, setValue] = useState<T>(() => {
@@ -94,52 +95,33 @@ type Product = {
   active: boolean;
 };
 const initialProducts: Product[] = [
-  {
-    id: 1,
-    name: "Commerce",
-    code: "COM",
-    description: "Experiência de comércio digital",
-    team: "Squad Commerce",
-    coordinator: "Marina Costa",
-    active: true,
-  },
-  {
-    id: 2,
-    name: "Payments",
-    code: "PAY",
-    description: "Pagamentos e serviços financeiros",
-    team: "Squad Payments",
-    coordinator: "Rafael Lima",
-    active: true,
-  },
-  {
-    id: 3,
-    name: "Customer",
-    code: "CUS",
-    description: "Jornada e relacionamento com clientes",
-    team: "Squad Customer",
-    coordinator: "Camila Souza",
-    active: true,
-  },
-  {
-    id: 4,
-    name: "Platform",
-    code: "PLT",
-    description: "Plataforma e serviços compartilhados",
-    team: "Squad Platform",
-    coordinator: "Bruno Alves",
-    active: true,
-  },
-  {
-    id: 5,
-    name: "Analytics",
-    code: "ANA",
-    description: "Dados e inteligência analítica",
-    team: "Squad Analytics",
-    coordinator: "Bianca Melo",
-    active: true,
-  },
+  { id: 1, name: "nddMove", code: "MOVE", description: "", team: "Squad nddMove", coordinator: "Marina Costa", active: true },
+  { id: 2, name: "nddCargo", code: "CARGO", description: "", team: "Squad nddCargo", coordinator: "Rafael Lima", active: true },
+  { id: 3, name: "nddElog", code: "ELOG", description: "", team: "Squad nddElog", coordinator: "Camila Souza", active: true },
+  { id: 4, name: "nddFrete", code: "FRETE", description: "", team: "Squad nddFrete", coordinator: "Bruno Alves", active: true },
+  { id: 5, name: "CIOT FÁCIL", code: "CIOT", description: "", team: "Squad CIOT FÁCIL", coordinator: "Bianca Melo", active: true },
 ];
+const legacyProductNames: Record<string,string> = { Commerce: "nddMove", Payments: "nddCargo", Customer: "nddElog", Platform: "nddFrete", Analytics: "CIOT FÁCIL" };
+function migrateProducts() {
+  try {
+    if (localStorage.getItem("dev-plan:products-v2")) return;
+    // Atualiza referências do conjunto demonstrativo antigo sem apagar demandas ou capacidade.
+    for (const key of ["dev-plan:demands", "dev-plan:team", "dev-plan:history", "dev-plan:roadmap-versions"]) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const value = JSON.parse(raw);
+      const replace = (item:unknown):unknown => {
+        if (Array.isArray(item)) return item.map(replace);
+        if (item && typeof item === "object") return Object.fromEntries(Object.entries(item).map(([field,content]) => [field, field === "product" && typeof content === "string" ? legacyProductNames[content] ?? content : replace(content)]));
+        return item;
+      };
+      localStorage.setItem(key, JSON.stringify(replace(value)));
+    }
+    localStorage.setItem("dev-plan:products", JSON.stringify(initialProducts));
+    localStorage.setItem("dev-plan:products-v2", "1");
+  } catch { /* Mantém os dados locais quando o armazenamento não estiver disponível. */ }
+}
+migrateProducts();
 const ProductContext = createContext<{
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
@@ -175,7 +157,7 @@ const demands: Demand[] = [
   {
     id: "DEV-142",
     name: "Novo checkout omnichannel",
-    product: "Commerce",
+    product: "nddMove",
     owner: "Marina",
     status: "Desenvolvimento",
     priority: "Crítica",
@@ -188,7 +170,7 @@ const demands: Demand[] = [
   {
     id: "DEV-148",
     name: "Motor antifraude v2",
-    product: "Payments",
+    product: "nddCargo",
     owner: "Rafael",
     status: "Em testes",
     priority: "Alta",
@@ -201,7 +183,7 @@ const demands: Demand[] = [
   {
     id: "DEV-151",
     name: "Portal de autoatendimento",
-    product: "Customer",
+    product: "nddElog",
     owner: "Camila",
     status: "Planejada",
     priority: "Alta",
@@ -214,7 +196,7 @@ const demands: Demand[] = [
   {
     id: "DEV-154",
     name: "Adequação regulatória BACEN",
-    product: "Payments",
+    product: "nddCargo",
     owner: "Lucas",
     status: "Em análise",
     priority: "Crítica",
@@ -227,7 +209,7 @@ const demands: Demand[] = [
   {
     id: "DEV-156",
     name: "Otimização de busca",
-    product: "Platform",
+    product: "nddFrete",
     owner: "Bruno",
     status: "Concluída",
     priority: "Média",
@@ -240,7 +222,7 @@ const demands: Demand[] = [
   {
     id: "DEV-159",
     name: "Novo painel de clientes",
-    product: "Analytics",
+    product: "CIOT FÁCIL",
     owner: "Bianca",
     status: "Bloqueada",
     priority: "Média",
@@ -1152,7 +1134,7 @@ function RoadmapList({
 const emptyDemandForm = {
   name: "",
   description: "",
-  product: "Commerce",
+  product: "nddMove",
   type: "Evolutiva",
   version: "",
   origin: "Produto",
@@ -2032,12 +2014,12 @@ const initialStaff: Staff[] = members.map(([name, role, total, used], i) => ({
   name: String(name),
   role: String(role),
   product: [
-    "Commerce",
-    "Payments",
-    "Customer",
-    "Payments",
-    "Platform",
-    "Analytics",
+    "nddMove",
+    "nddCargo",
+    "nddElog",
+    "nddCargo",
+    "nddFrete",
+    "CIOT FÁCIL",
   ][i],
   total: Number(total),
   used: Number(used),
@@ -2806,15 +2788,32 @@ function Settings() {
   );
 }
 
-type AccessRole="Administrador"|"Editor"|"Visualização";
-function UsersAdmin(){const [users,setUsers]=useState([{id:1,name:"Vagner Moraes",email:"vagner@atlas.com",role:"Administrador" as AccessRole},{id:2,name:"Marina Costa",email:"marina@atlas.com",role:"Editor" as AccessRole},{id:3,name:"Bianca Melo",email:"bianca@atlas.com",role:"Visualização" as AccessRole}]);return <><PageHead title="Administração de usuários" desc="Gerencie os níveis de acesso ao portal." action={<button className="primary"><I.UserPlus/> Novo usuário</button>}/><Card><div className="tablewrap"><table><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Permissões</th></tr></thead><tbody>{users.map((user)=><tr key={user.id}><td><span className="person">{user.name[0]}</span><b>{user.name}</b></td><td>{user.email}</td><td><select className="quarter-inline" value={user.role} onChange={(e)=>setUsers(users.map((item)=>item.id===user.id?{...item,role:e.target.value as AccessRole}:item))}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></td><td>{user.role==="Administrador"?"Acesso total":user.role==="Editor"?"Demandas, produtos, capacidade e roadmap":"Somente demandas e roadmap"}</td></tr>)}</tbody></table></div></Card></>}
+function UsersAdmin({users, currentId, onChange}:{users:Account[];currentId:string;onChange:(users:Account[])=>void}) {
+  const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [role,setRole]=useState<AccessRole>("Editor"); const [error,setError]=useState("");
+  async function add(e:React.FormEvent) { e.preventDefault(); setError(""); if(password.length<8){setError("A senha deve ter pelo menos 8 caracteres.");return} if(users.some(u=>u.email===email.trim().toLowerCase())){setError("Este e-mail já está cadastrado.");return} try {onChange([...users,await makeAccount(name,email,password,role)]);setName("");setEmail("");setPassword("")} catch {setError("Não foi possível salvar o usuário.")} }
+  function changeRole(user:Account, next:AccessRole){if(user.id===currentId && next!=="Administrador")return;onChange(users.map(u=>u.id===user.id?{...u,role:next}:u))}
+  function remove(user:Account){if(user.id===currentId)return;onChange(users.filter(u=>u.id!==user.id))}
+  return <><PageHead title="Administração de usuários" desc="Cadastre usuários e defina os níveis de acesso ao portal."/><Card><form className="account-form" onSubmit={add}><label>Nome<input required value={name} onChange={e=>setName(e.target.value)} /></label><label>E-mail<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} /></label><label>Senha inicial<input required type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} /></label><label>Perfil<select value={role} onChange={e=>setRole(e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></label><button className="primary" type="submit"><I.UserPlus/> Criar usuário</button></form>{error&&<p className="auth-error" role="alert">{error}</p>}</Card><Card><div className="tablewrap"><table><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Permissões</th><th></th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td><span className="person">{user.name[0]}</span><b>{user.name}</b></td><td>{user.email}</td><td><select className="quarter-inline" value={user.role} disabled={user.id===currentId} onChange={e=>changeRole(user,e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></td><td>{user.role==="Administrador"?"Acesso total":user.role==="Editor"?"Demandas, produtos, capacidade e roadmap":"Somente demandas e roadmap"}</td><td>{user.id!==currentId&&<button className="ghost" onClick={()=>remove(user)} aria-label={`Excluir ${user.name}`}><I.Trash2/></button>}</td></tr>)}</tbody></table></div></Card></>;
+}
+
+function Login({hasAccounts,onLogin}:{hasAccounts:boolean;onLogin:(account:Account,accounts?:Account[])=>void}) {
+  const [name,setName]=useState("");const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [error,setError]=useState("");const [busy,setBusy]=useState(false);
+  async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try {if(!hasAccounts){if(password.length<8){setError("Use uma senha com pelo menos 8 caracteres.");return}const account=await makeAccount(name,email,password,"Administrador");onLogin(account,[account]);return}const account=loadAccounts().find(u=>u.email===email.trim().toLowerCase());if(!account || await hashPassword(password,account.salt)!==account.passwordHash){setError("E-mail ou senha inválidos.");return}onLogin(account)}catch{setError("Não foi possível autenticar. Verifique o armazenamento do navegador.")}finally{setBusy(false)}}
+  return <div className="login-screen"><form className="login-card" onSubmit={submit}><div className="login-mark"><I.Waypoints/></div><h1>{hasAccounts?"Entrar no Roadmap":"Criar administrador"}</h1><p>{hasAccounts?"Acesse com seu e-mail e senha.":"Configure o primeiro acesso deste navegador."}</p>{!hasAccounts&&<label>Nome<input required autoComplete="name" value={name} onChange={e=>setName(e.target.value)}/></label>}<label>E-mail<input required type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Senha<input required type="password" minLength={hasAccounts?1:8} autoComplete={hasAccounts?"current-password":"new-password"} value={password} onChange={e=>setPassword(e.target.value)}/></label>{error&&<p className="auth-error" role="alert">{error}</p>}<button className="primary" disabled={busy} type="submit">{busy?"Aguarde...":hasAccounts?"Entrar":"Criar conta e entrar"}</button><small>Os usuários e dados deste protótipo ficam armazenados neste navegador.</small></form></div>
+}
 
 function App() {
+  const [accounts,setAccounts]=useState<Account[]>(loadAccounts);
+  const [activeId,setActiveId]=useState<string|null>(sessionId);
+  const activeUser=accounts.find(u=>u.id===activeId);
   const [page, setPage] = useState<Page>("Visão geral");
   const [dark, setDark] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [cmd, setCmd] = useState(false);
-  const [role,setRole]=useState<AccessRole>("Administrador");
+  const role=activeUser?.role ?? "Visualização";
+  function updateAccounts(next:Account[]){saveAccounts(next);setAccounts(next)}
+  function login(account:Account,next?:Account[]){if(next)updateAccounts(next);setSession(account.id);setActiveId(account.id)}
+  function logout(){setSession(null);setActiveId(null);setCmd(false)}
   const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade"].includes(name):["Demandas","Roadmap","Comparação"].includes(name));
   useEffect(()=>{if(!allowedNav.some(([name])=>name===page))setPage(role==="Visualização"?"Demandas":"Visão geral")},[role]);
   useEffect(() => {
@@ -2827,6 +2826,7 @@ function App() {
     addEventListener("keydown", f);
     return () => removeEventListener("keydown", f);
   }, []);
+  if(!activeUser)return <Login hasAccounts={accounts.length>0} onLogin={login}/>;
   return (
     <div className={`${dark ? "app dark" : "app"} ${role === "Visualização" ? "role-viewer" : role === "Editor" ? "role-editor" : "role-admin"}`}>
       <aside className={collapsed ? "collapsed" : ""}>
@@ -2883,12 +2883,12 @@ function App() {
               <i />
             </button>
             <div className="user">
-              <span>VM</span>
+              <span>{activeUser.name.split(" ").map(part=>part[0]).slice(0,2).join("").toUpperCase()}</span>
               <div>
-                <b>Vagner Moraes</b>
-                <select className="role-switch" value={role} onChange={(e)=>setRole(e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select>
+                <b>{activeUser.name}</b>
+                <small>{role}</small>
               </div>
-              <I.ChevronDown />
+              <button className="logout-button" onClick={logout} title="Sair" aria-label="Sair"><I.LogOut/></button>
             </div>
           </div>
         </header>
@@ -2912,7 +2912,7 @@ function App() {
           ) : page === "Relatórios" ? (
             <Reports />
           ) : page === "Usuários" ? (
-            <UsersAdmin />
+            <UsersAdmin users={accounts} currentId={activeUser.id} onChange={updateAccounts}/>
           ) : (
             <Settings />
           )}
@@ -2926,7 +2926,7 @@ function App() {
               <input autoFocus placeholder="O que você procura?" />
             </label>
             <small>NAVEGAÇÃO</small>
-            {nav.slice(0, 6).map(([n, Icon]) => (
+            {allowedNav.map(([n, Icon]) => (
               <button
                 onClick={() => {
                   setPage(n);
