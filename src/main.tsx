@@ -97,6 +97,19 @@ type Product = {
   coordinator: string;
   active: boolean;
 };
+const ProductAccessContext = createContext<Set<number> | null>(null);
+function scopedSetter<T>(setValue: React.Dispatch<React.SetStateAction<T[]>>, isVisible: (item: T) => boolean): React.Dispatch<React.SetStateAction<T[]>> {
+  return update => setValue(current => {
+    const visible = current.filter(isVisible);
+    const next = typeof update === "function" ? (update as (items: T[]) => T[])(visible) : update;
+    return [...current.filter(item => !isVisible(item)), ...next];
+  });
+}
+function useAllowedProductNames() {
+  const allowedIds = useContext(ProductAccessContext);
+  const catalog = useContext(ProductContext);
+  return allowedIds === null ? null : new Set((catalog?.products || []).filter(product => allowedIds.has(product.id)).map(product => product.name));
+}
 const initialProducts: Product[] = [
   { id: 1, name: "nddMove", code: "MOVE", description: "", team: "Squad nddMove", coordinator: "Marina Costa", active: true },
   { id: 2, name: "nddCargo", code: "CARGO", description: "", team: "Squad nddCargo", coordinator: "Rafael Lima", active: true },
@@ -140,7 +153,9 @@ function ProductProvider({ children }: { children: React.ReactNode }) {
 function useProducts() {
   const value = useContext(ProductContext);
   if (!value) throw new Error("ProductProvider ausente");
-  return value;
+  const allowedIds = useContext(ProductAccessContext);
+  if (allowedIds === null) return value;
+  return { products: value.products.filter(product => allowedIds.has(product.id)), setProducts: scopedSetter(value.setProducts, product => allowedIds.has(product.id)) };
 }
 type RoadmapEntry = {
   demandId: string;
@@ -257,7 +272,20 @@ function DemandProvider({ children }: { children: React.ReactNode }) {
 function useDemands() {
   const value = useContext(DemandContext);
   if (!value) throw new Error("DemandProvider ausente");
-  return value;
+  const allowedNames = useAllowedProductNames();
+  if (allowedNames === null) return value;
+  const canSeeDemand = (demand: Demand) => allowedNames.has(demand.product);
+  const visibleIds = new Set(value.rows.filter(canSeeDemand).map(demand => demand.id));
+  const canSeeEntry = (entry: RoadmapEntry) => visibleIds.has(entry.demandId);
+  const canSeeHistory = (entry: ChangeLog) => Boolean(entry.product && allowedNames.has(entry.product));
+  const canSeeVersion = (version: RoadmapVersion) => version.demands.some(canSeeDemand);
+  return {
+    rows: value.rows.filter(canSeeDemand), setRows: scopedSetter(value.setRows, canSeeDemand),
+    roadmap: value.roadmap.filter(canSeeEntry), setRoadmap: scopedSetter(value.setRoadmap, canSeeEntry),
+    history: value.history.filter(canSeeHistory), setHistory: scopedSetter(value.setHistory, canSeeHistory),
+    versions: value.versions.filter(canSeeVersion).map(version => ({ ...version, demands: version.demands.filter(canSeeDemand), entries: version.entries.filter(canSeeEntry) })),
+    setVersions: scopedSetter(value.setVersions, canSeeVersion),
+  };
 }
 const nav: [Page, any][] = [
   ["Visão geral", I.LayoutDashboard],
@@ -2114,7 +2142,10 @@ function TeamProvider({ children }: { children: React.ReactNode }) {
 function useTeam() {
   const value = useContext(TeamContext);
   if (!value) throw new Error("TeamProvider ausente");
-  return value;
+  const allowedNames = useAllowedProductNames();
+  if (allowedNames === null) return value;
+  const canSeePerson = (person: Staff) => allowedNames.has(person.product);
+  return { team: value.team.filter(canSeePerson), setTeam: scopedSetter(value.setTeam, canSeePerson) };
 }
 const emptyStaff = {
   name: "",
@@ -2898,11 +2929,38 @@ function Settings() {
 }
 
 function UsersAdmin({users, currentId, onChange}:{users:Account[];currentId:string;onChange:(users:Account[])=>void}) {
-  const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [role,setRole]=useState<AccessRole>("Editor"); const [error,setError]=useState("");
-  async function add(e:React.FormEvent) { e.preventDefault(); setError(""); if(password.length<8){setError("A senha deve ter pelo menos 8 caracteres.");return} if(users.some(u=>u.email===email.trim().toLowerCase())){setError("Este e-mail já está cadastrado.");return} try {onChange([...users,await makeAccount(name,email,password,role)]);setName("");setEmail("");setPassword("")} catch {setError("Não foi possível salvar o usuário.")} }
-  function changeRole(user:Account, next:AccessRole){if(user.email===ADMIN_EMAIL || user.id===currentId && next!=="Administrador")return;onChange(users.map(u=>u.id===user.id?{...u,role:next}:u))}
-  function remove(user:Account){if(user.id===currentId || user.email===ADMIN_EMAIL)return;onChange(users.filter(u=>u.id!==user.id))}
-  return <><PageHead title="Administração de usuários" desc="Cadastre usuários e defina os níveis de acesso ao portal."/><Card><form className="account-form" onSubmit={add}><label>Nome<input required value={name} onChange={e=>setName(e.target.value)} /></label><label>E-mail<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} /></label><label>Senha inicial<input required type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} /></label><label>Perfil<select value={role} onChange={e=>setRole(e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></label><button className="primary" type="submit"><I.UserPlus/> Criar usuário</button></form>{error&&<p className="auth-error" role="alert">{error}</p>}</Card><Card><div className="tablewrap"><table><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Permissões</th><th></th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td><span className="person">{user.name[0]}</span><b>{user.name}</b></td><td>{user.email}</td><td><select className="quarter-inline" value={user.role} disabled={user.id===currentId || user.email===ADMIN_EMAIL} onChange={e=>changeRole(user,e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></td><td>{user.role==="Administrador"?"Acesso total":user.role==="Editor"?"Demandas, produtos, capacidade e roadmap":"Somente demandas e roadmap"}</td><td>{user.id!==currentId && user.email!==ADMIN_EMAIL && <button className="ghost" onClick={()=>remove(user)} aria-label={`Excluir ${user.name}`}><I.Trash2/></button>}</td></tr>)}</tbody></table></div></Card></>;
+  const { products } = useProducts();
+  const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [password,setPassword]=useState("");
+  const [role,setRole]=useState<AccessRole>("Editor"); const [selectedProducts,setSelectedProducts]=useState<number[]>([]); const [error,setError]=useState("");
+  const allIds=products.map(product=>product.id);
+  const toggle=(ids:number[],id:number)=>ids.includes(id)?ids.filter(value=>value!==id):[...ids,id];
+  async function add(e:React.FormEvent) {
+    e.preventDefault(); setError("");
+    if(password.length<8){setError("A senha deve ter pelo menos 8 caracteres.");return}
+    if(users.some(user=>user.email===email.trim().toLowerCase())){setError("Este e-mail já está cadastrado.");return}
+    if(role!=="Administrador" && selectedProducts.length===0){setError("Selecione ao menos um produto para o usuário.");return}
+    try {const account=await makeAccount(name,email,password,role);onChange([...users,{...account,productIds:role==="Administrador"?allIds:selectedProducts}]);setName("");setEmail("");setPassword("");setSelectedProducts([])}
+    catch {setError("Não foi possível salvar o usuário.")}
+  }
+  function changeRole(user:Account,next:AccessRole){if(user.email===ADMIN_EMAIL || user.id===currentId && next!=="Administrador")return;onChange(users.map(item=>item.id===user.id?{...item,role:next,productIds:next==="Administrador"?allIds:item.productIds??allIds}:item))}
+  function changeProducts(user:Account,id:number){if(user.role==="Administrador")return;const next=toggle(user.productIds??allIds,id);onChange(users.map(item=>item.id===user.id?{...item,productIds:next}:item))}
+  function remove(user:Account){if(user.id===currentId || user.email===ADMIN_EMAIL)return;onChange(users.filter(item=>item.id!==user.id))}
+  return <><PageHead title="Administração de usuários" desc="Defina o perfil e os produtos que cada usuário pode acessar."/>
+    <Card><form className="account-form" onSubmit={add}>
+      <label>Nome<input required value={name} onChange={event=>setName(event.target.value)}/></label>
+      <label>E-mail<input required type="email" value={email} onChange={event=>setEmail(event.target.value)}/></label>
+      <label>Senha inicial<input required type="password" minLength={8} value={password} onChange={event=>setPassword(event.target.value)}/></label>
+      <label>Perfil<select value={role} onChange={event=>setRole(event.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></label>
+      {role!=="Administrador"&&<fieldset className="user-product-options"><legend>Produtos permitidos</legend>{products.map(product=><label key={product.id}><input type="checkbox" checked={selectedProducts.includes(product.id)} onChange={()=>setSelectedProducts(toggle(selectedProducts,product.id))}/>{product.name}</label>)}</fieldset>}
+      <button className="primary" type="submit"><I.UserPlus/> Criar usuário</button>
+    </form>{error&&<p className="auth-error" role="alert">{error}</p>}</Card>
+    <Card><div className="tablewrap"><table><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Produtos permitidos</th><th></th></tr></thead><tbody>{users.map(user=><tr key={user.id}>
+      <td><span className="person">{user.name[0]}</span><b>{user.name}</b></td><td>{user.email}</td>
+      <td><select className="quarter-inline" value={user.role} disabled={user.id===currentId||user.email===ADMIN_EMAIL} onChange={event=>changeRole(user,event.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></td>
+      <td>{user.role==="Administrador"?"Todos os produtos":<div className="user-product-options compact">{products.map(product=><label key={product.id}><input type="checkbox" checked={(user.productIds??allIds).includes(product.id)} onChange={()=>changeProducts(user,product.id)}/>{product.name}</label>)}</div>}</td>
+      <td>{user.id!==currentId&&user.email!==ADMIN_EMAIL&&<button className="ghost" onClick={()=>remove(user)} aria-label={`Excluir ${user.name}`}><I.Trash2/></button>}</td>
+    </tr>)}</tbody></table></div></Card>
+  </>;
 }
 
 function Login({hasAccounts,onLogin}:{hasAccounts:boolean;onLogin:(account:Account,remember:boolean,accounts?:Account[])=>void}) {
@@ -2912,6 +2970,7 @@ function Login({hasAccounts,onLogin}:{hasAccounts:boolean;onLogin:(account:Accou
 }
 
 function App() {
+  const productCatalog = useContext(ProductContext);
   const [accounts,setAccounts]=useState<Account[]>(loadAccounts);
   const [activeId,setActiveId]=useState<string|null>(sessionId);
   const activeUser=accounts.find(u=>u.id===activeId);
@@ -2923,7 +2982,7 @@ function App() {
   function updateAccounts(next:Account[]){saveAccounts(next);setAccounts(next)}
   function login(account:Account,remember:boolean,next?:Account[]){if(next)updateAccounts(next);setSession(account.id,remember);setActiveId(account.id)}
   function logout(){setSession(null);setActiveId(null);setCmd(false)}
-  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade","Analytics"].includes(name):["Demandas","Roadmap","Comparação","Analytics"].includes(name));
+  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade","Analytics"].includes(name):["Demandas","Roadmap","Comparação","Capacidade","Analytics"].includes(name));
   useEffect(()=>{if(!allowedNav.some(([name])=>name===page))setPage(role==="Visualização"?"Demandas":"Visão geral")},[role]);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -2937,6 +2996,7 @@ function App() {
   }, []);
   if(!activeUser)return <Login hasAccounts={accounts.length>0} onLogin={login}/>;
   return (
+    <ProductAccessContext.Provider value={role === "Administrador" ? null : new Set(activeUser.productIds ?? productCatalog?.products.map(product => product.id) ?? [])}>
     <div className={`${dark ? "app dark" : "app"} ${role === "Visualização" ? "role-viewer" : role === "Editor" ? "role-editor" : "role-admin"}`}>
       <aside className={collapsed ? "collapsed" : ""}>
         <div className="brand">
@@ -3057,6 +3117,7 @@ function App() {
         </div>
       )}
     </div>
+    </ProductAccessContext.Provider>
   );
 }
 createRoot(document.getElementById("root")!).render(
