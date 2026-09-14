@@ -382,8 +382,12 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
   const completed = scoped.filter((d) => ["Concluído", "Concluída"].includes(d.status)).length;
   const developmentTeam = scopedTeam.filter(person => ["DEV", "BACKEND", "FRONTEND", "FULL STACK"].includes(person.role.trim().toUpperCase()));
   const testingTeam = scopedTeam.filter(person => ["QA", "QA ENGINEER"].includes(person.role.trim().toUpperCase()));
+  const coordinationTeam = scopedTeam.filter(person => person.role.trim().toUpperCase() === "COORDENADOR");
+  const specialistTeam = scopedTeam.filter(person => ["ESPECIALISTA", "ESPECIALISTA DEV 1"].includes(person.role.trim().toUpperCase()));
   const developmentCapacity = developmentTeam.reduce((sum, person) => sum + person.total, 0);
   const testingCapacity = testingTeam.reduce((sum, person) => sum + person.total, 0);
+  const coordinationCapacity = coordinationTeam.reduce((sum, person) => sum + person.total, 0);
+  const specialistCapacity = specialistTeam.reduce((sum, person) => sum + person.total, 0);
   const progress = scoped.length ? Math.round(scoped.reduce((sum, d) => sum + d.progress, 0) / scoped.length) : 0;
   const kpis = [
     ["Capacidade total", `${totalCapacity}h`, `${utilization}% alocada · ${scopedTeam.length} colaboradores`, utilization > 90 ? "bad" : "blue", I.Users],
@@ -420,7 +424,7 @@ function Dashboard({ go }: { go: (p: Page) => void }) {
           </Card>
         ))}
       </div>
-      <Card className="discipline-capacity-card"><div className="cardhead"><div><h3>Capacidade por disciplina</h3><p>Horas cadastradas para o escopo selecionado</p></div></div><div className="discipline-capacity-grid"><div><span><I.Code2/> Capacidade de Desenvolvimento</span><strong>{developmentCapacity}h</strong><small>{developmentTeam.length} colaboradores DEV</small></div><div><span><I.FlaskConical/> Capacidade de Testes</span><strong>{testingCapacity}h</strong><small>{testingTeam.length} colaboradores QA</small></div></div></Card>
+      <Card className="discipline-capacity-card"><div className="cardhead"><div><h3>Capacidade por disciplina</h3><p>Horas cadastradas para o escopo selecionado</p></div></div><div className="discipline-capacity-grid"><div><span><I.Code2/> Capacidade de Desenvolvimento</span><strong>{developmentCapacity}h</strong><small>{developmentTeam.length} colaboradores DEV</small></div><div><span><I.FlaskConical/> Capacidade de Testes</span><strong>{testingCapacity}h</strong><small>{testingTeam.length} colaboradores QA</small></div><div><span><I.UsersRound/> Capacidade de Coordenação</span><strong>{coordinationCapacity}h</strong><small>{coordinationTeam.length} coordenador(es)</small></div><div><span><I.Braces/> Capacidade de Especialista DEV 1</span><strong>{specialistCapacity}h</strong><small>{specialistTeam.length} especialista(s)</small></div></div></Card>
       <Card className="product-capacity-card"><div className="cardhead"><div><h3>Capacidade por produto</h3><p>Capacidade cadastrada, alocada e disponível por produto</p></div><Badge tone="gray">{capacityByProduct.length} produto(s)</Badge></div><div className="product-capacity-grid">{capacityByProduct.map((item)=><div className="product-capacity-item" key={item.product}><div><span className="product-mini-icon"><I.Boxes/></span><div><b>{item.product}</b><small>{item.available}h disponíveis</small></div><strong className={item.utilization>90?"bad":""}>{item.utilization}%</strong></div><div className="product-capacity-bar"><i className={item.utilization>90?"over":""} style={{width:Math.min(item.utilization,100)+"%"}}/></div><footer><span>Total <b>{item.total}h</b></span><span>Alocada <b>{item.allocated}h</b></span></footer></div>)}</div></Card>
       <div className="grid2">
         <Card>
@@ -1994,7 +1998,13 @@ type Staff = {
   total: number;
   used: number;
 };
-const initialStaff: Staff[] = capacitySeed;
+function normalizeStaffRole(role: string) {
+  const normalized = role.trim().toUpperCase();
+  if (normalized === "COORDENADOR") return "Coordenador";
+  if (normalized === "ESPECIALISTA" || normalized === "ESPECIALISTA DEV 1") return "Especialista DEV 1";
+  return role.trim();
+}
+const initialStaff: Staff[] = capacitySeed.map(person => ({ ...person, role: normalizeStaffRole(person.role) }));
 function replaceRegisteredStaff() {
   try {
     if (localStorage.getItem("dev-plan:team-spreadsheet-v1")) return;
@@ -2027,6 +2037,16 @@ function correctStaffProductsFromSpreadsheet() {
   } catch { /* A lista inicial já contém os produtos corrigidos. */ }
 }
 correctStaffProductsFromSpreadsheet();
+function normalizeRegisteredStaffRoles() {
+  try {
+    if (localStorage.getItem("dev-plan:team-roles-v2")) return;
+    const raw = localStorage.getItem("dev-plan:team");
+    const stored: Staff[] = raw ? JSON.parse(raw) : initialStaff;
+    localStorage.setItem("dev-plan:team", JSON.stringify(stored.map(person => ({ ...person, role: normalizeStaffRole(person.role) }))));
+    localStorage.setItem("dev-plan:team-roles-v2", "1");
+  } catch { /* A lista inicial já usa as funções atualizadas. */ }
+}
+normalizeRegisteredStaffRoles();
 const TeamContext = createContext<{
   team: Staff[];
   setTeam: React.Dispatch<React.SetStateAction<Staff[]>>;
@@ -2096,7 +2116,7 @@ function Capacity() {
   const free = total - used;
   const overloaded = filteredTeam.filter((m) => effectiveUsed(m) / m.total > 0.9).length;
   const allocatedDemands=allocationFor?demandAllocations(allocationFor):[];
-  const importCapacity=async(e:React.ChangeEvent<HTMLInputElement>)=>{const file=e.target.files?.[0];if(!file)return;setImporting(true);setImportFeedback("");try{const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await file.arrayBuffer());const sheet=workbook.worksheets[0];if(!sheet)throw new Error();const headers:Record<number,string>={};sheet.getRow(1).eachCell((cell,col)=>headers[col]=cell.text.trim().toLowerCase());const get=(row:ExcelJS.Row,names:string[])=>{const col=Object.entries(headers).find(([,header])=>names.includes(header))?.[0];return col?row.getCell(Number(col)).text.trim():""};const incoming:Staff[]=[];let ignored=0;sheet.eachRow((row,index)=>{if(index===1)return;const name=get(row,["colaborador","nome","nome completo"]);const productText=get(row,["produto"]);const product=products.find((item)=>item.name.toLowerCase()===productText.toLowerCase()&&item.active);const total=Number(get(row,["capacidade","capacidade total","horas disponíveis","horas disponiveis"]).replace(",","."));if(!name||!product||!total){ignored++;return}incoming.push({id:Date.now()+index,name,role:get(row,["função","funcao","cargo"])||"Desenvolvedor",product:product.name,total,used:Number(get(row,["horas alocadas","alocada","alocação","alocacao"]).replace(",","."))||0})});setTeam((current)=>{const next=[...current];incoming.forEach((person)=>{const found=next.findIndex((item)=>item.name.toLowerCase()===person.name.toLowerCase());if(found>=0)next[found]={...person,id:next[found].id};else next.push(person)});return next});setImportFeedback(`${incoming.length} capacidade(s) importada(s)${ignored?` · ${ignored} linha(s) ignorada(s)`:""}.`)}catch{setImportFeedback("Não foi possível ler a planilha de capacidade.")}finally{setImporting(false);e.target.value=""}};
+  const importCapacity=async(e:React.ChangeEvent<HTMLInputElement>)=>{const file=e.target.files?.[0];if(!file)return;setImporting(true);setImportFeedback("");try{const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await file.arrayBuffer());const sheet=workbook.worksheets[0];if(!sheet)throw new Error();const headers:Record<number,string>={};sheet.getRow(1).eachCell((cell,col)=>headers[col]=cell.text.trim().toLowerCase());const get=(row:ExcelJS.Row,names:string[])=>{const col=Object.entries(headers).find(([,header])=>names.includes(header))?.[0];return col?row.getCell(Number(col)).text.trim():""};const incoming:Staff[]=[];let ignored=0;sheet.eachRow((row,index)=>{if(index===1)return;const name=get(row,["colaborador","nome","nome completo"]);const productText=get(row,["produto"]);const product=products.find((item)=>item.name.toLowerCase()===productText.toLowerCase()&&item.active);const total=Number(get(row,["capacidade","capacidade total","horas disponíveis","horas disponiveis"]).replace(",","."));if(!name||!product||!total){ignored++;return}incoming.push({id:Date.now()+index,name,role:normalizeStaffRole(get(row,["função","funcao","cargo"])||"Desenvolvedor"),product:product.name,total,used:Number(get(row,["horas alocadas","alocada","alocação","alocacao"]).replace(",","."))||0})});setTeam((current)=>{const next=[...current];incoming.forEach((person)=>{const found=next.findIndex((item)=>item.name.toLowerCase()===person.name.toLowerCase());if(found>=0)next[found]={...person,id:next[found].id};else next.push(person)});return next});setImportFeedback(`${incoming.length} capacidade(s) importada(s)${ignored?` · ${ignored} linha(s) ignorada(s)`:""}.`)}catch{setImportFeedback("Não foi possível ler a planilha de capacidade.")}finally{setImporting(false);e.target.value=""}};
   const openNew = () => {
     setEditing(null);
     setForm(emptyStaff);
@@ -2317,7 +2337,9 @@ function Capacity() {
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                 >
-                  {form.role && !["Tech Lead","Backend","Frontend","Full Stack","UX Engineer","QA Engineer","Product Manager"].includes(form.role) && <option>{form.role}</option>}
+                  {form.role && !["Coordenador","Especialista DEV 1","Tech Lead","Backend","Frontend","Full Stack","UX Engineer","QA Engineer","Product Manager"].includes(form.role) && <option>{form.role}</option>}
+                  <option>Coordenador</option>
+                  <option>Especialista DEV 1</option>
                   <option>Tech Lead</option>
                   <option>Backend</option>
                   <option>Frontend</option>
