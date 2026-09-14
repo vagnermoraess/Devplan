@@ -28,7 +28,7 @@ import "./dashboard.css";
 import "./capacity.css";
 import "./changes.css";
 import "./demands.css";
-import { Account, AccessRole, hashPassword, loadAccounts, makeAccount, saveAccounts, sessionId, setSession } from "./auth";
+import { ADMIN_EMAIL, Account, AccessRole, hashPassword, loadAccounts, makeAccount, saveAccounts, sessionId, setSession } from "./auth";
 
 function usePersistentState<T>(key: string, initialValue: T | (() => T)) {
   const [value, setValue] = useState<T>(() => {
@@ -154,85 +154,79 @@ type RoadmapVersion = {
   demands: Demand[];
 };
 const demands: Demand[] = [
-  {
-    id: "DEV-142",
-    name: "Novo checkout omnichannel",
-    product: "nddMove",
-    owner: "Marina",
-    status: "Desenvolvimento",
-    priority: "Crítica",
-    effort: 120,
-    progress: 68,
-    due: "12 Set",
-    startDate: "2026-07-08", dueDate: "2026-09-12",
-    risk: "Alto",
-  },
-  {
-    id: "DEV-148",
-    name: "Motor antifraude v2",
-    product: "nddCargo",
-    owner: "Rafael",
-    status: "Em testes",
-    priority: "Alta",
-    effort: 96,
-    progress: 82,
-    due: "06 Set",
-    startDate: "2026-07-22", dueDate: "2026-09-06",
-    risk: "Médio",
-  },
-  {
-    id: "DEV-151",
-    name: "Portal de autoatendimento",
-    product: "nddElog",
-    owner: "Camila",
-    status: "Planejada",
-    priority: "Alta",
-    effort: 140,
-    progress: 24,
-    due: "24 Set",
-    startDate: "2026-08-03", dueDate: "2026-09-24",
-    risk: "Crítico",
-  },
-  {
-    id: "DEV-154",
-    name: "Adequação regulatória BACEN",
-    product: "nddCargo",
-    owner: "Lucas",
-    status: "Em análise",
-    priority: "Crítica",
-    effort: 60,
-    progress: 10,
-    due: "18 Set",
-    startDate: "2026-08-24", dueDate: "2026-09-18",
-    risk: "Alto",
-  },
-  {
-    id: "DEV-156",
-    name: "Otimização de busca",
+  ...[
+    "[OXXO] Integrar filiais do SAP para Frete",
+    "Gerenciamento de transmissões",
+    "Sincronização de ocorrência parametrizáveis (Move)",
+    "Tratar performance e telas lentas",
+    "Analisar componentes que impedem seleção",
+    "Atualizar componentes NDS",
+  ].map((name, index) => ({
+    id: `DEV-${160 + index}`,
+    name,
     product: "nddFrete",
-    owner: "Bruno",
-    status: "Concluída",
+    owner: "",
+    status: "Backlog",
     priority: "Média",
-    effort: 48,
-    progress: 100,
-    due: "28 Ago",
-    startDate: "2026-07-15", dueDate: "2026-08-28",
+    effort: 0,
+    progress: 0,
+    due: "Sem prazo",
     risk: "Baixo",
-  },
-  {
-    id: "DEV-159",
-    name: "Novo painel de clientes",
-    product: "CIOT FÁCIL",
-    owner: "Bianca",
-    status: "Bloqueada",
+    resourceIds: [],
+  })),
+  ...[
+    "Unificar Move x Elog - Migração de Mapas para OpenStreetMap",
+    "Projeto GEQ: Alertas",
+    "Projeto GEQ: Gestão de Custos extras",
+    "Projeto GEQ: Sequenciamento no APP",
+    "Onde está minha entrega? - visão cliente final",
+    "Dashboards direto no portal ( BI Move > Elog)",
+    "Projeto GEQ: Motorista -  Disponibilizar-se para carregamento",
+  ].map((name, index) => ({
+    id: `DEV-${166 + index}`,
+    name,
+    product: "nddMove",
+    owner: "",
+    status: "Backlog",
     priority: "Média",
-    effort: 72,
-    progress: 35,
-    due: "30 Set",
-    startDate: "2026-09-01", dueDate: "2026-09-30",
-    risk: "Alto",
-  },
+    effort: 0,
+    progress: 0,
+    due: "Sem prazo",
+    risk: "Baixo",
+    resourceIds: [],
+  })),
 ];
+function replaceRegisteredDemands() {
+  try {
+    if (localStorage.getItem("dev-plan:demands-v2")) return;
+    localStorage.setItem("dev-plan:demands", JSON.stringify(demands));
+    localStorage.setItem("dev-plan:roadmap", "[]");
+    localStorage.setItem("dev-plan:history", "[]");
+    localStorage.setItem("dev-plan:roadmap-versions", "[]");
+    localStorage.setItem("dev-plan:demands-v2", "1");
+  } catch { /* A lista inicial continua disponível sem armazenamento local. */ }
+}
+replaceRegisteredDemands();
+function addMoveDemandsToStoredData() {
+  try {
+    if (localStorage.getItem("dev-plan:move-demands-v1")) return;
+    const stored = JSON.parse(localStorage.getItem("dev-plan:demands") || "[]");
+    const rows: Demand[] = Array.isArray(stored) ? stored : [];
+    const moveDemands = demands.filter(demand => demand.product === "nddMove");
+    const missing = moveDemands.filter(demand => !rows.some(row => row.product === demand.product && row.name === demand.name));
+    const usedIds = new Set(rows.map(row => row.id));
+    const next = missing.map(demand => {
+      let id = demand.id;
+      let number = 173;
+      while (usedIds.has(id)) id = `DEV-${number++}`;
+      usedIds.add(id);
+      return { ...demand, id };
+    });
+    localStorage.setItem("dev-plan:demands", JSON.stringify([...rows, ...next]));
+    localStorage.setItem("dev-plan:move-demands-v1", "1");
+  } catch { /* Os dados iniciais continuam disponíveis sem armazenamento local. */ }
+}
+addMoveDemandsToStoredData();
 const DemandContext = createContext<{
   rows: Demand[];
   setRows: React.Dispatch<React.SetStateAction<Demand[]>>;
@@ -247,12 +241,7 @@ function DemandProvider({ children }: { children: React.ReactNode }) {
   const [rows, setRows] = usePersistentState<Demand[]>("dev-plan:demands", demands);
   const [roadmap, setRoadmap] = usePersistentState<RoadmapEntry[]>(
     "dev-plan:roadmap",
-    () => demands.slice(0, 5).map((d) => ({
-      demandId: d.id,
-      quarter: "Q3 2026",
-      collaborators: [d.owner],
-      allocations: [{ staffId: Math.max(1, members.findIndex(([name]) => String(name).startsWith(d.owner)) + 1), hours: d.effort }],
-    })),
+    [],
   );
   const [history,setHistory]=usePersistentState<ChangeLog[]>("dev-plan:history", []);
   const [versions,setVersions]=usePersistentState<RoadmapVersion[]>("dev-plan:roadmap-versions", []);
@@ -2492,22 +2481,8 @@ function Planning() {
             <I.TriangleAlert />
             <div>
               <b>Capacidade próxima do limite</b>
-              <p>A mudança pode impactar 2 entregas do roadmap.</p>
+              <p>Não há entregas do roadmap vinculadas às novas demandas.</p>
             </div>
-          </div>
-          <div className="impactrow">
-            <span>
-              <i className="dot bad" />
-              <b>Portal de autoatendimento</b>
-            </span>
-            <b>+5 dias</b>
-          </div>
-          <div className="impactrow">
-            <span>
-              <i className="dot warn" />
-              <b>Novo checkout omnichannel</b>
-            </span>
-            <b>+2 dias</b>
           </div>
           <button className="primary full">Aplicar ao planejamento</button>
         </Card>
@@ -2791,9 +2766,9 @@ function Settings() {
 function UsersAdmin({users, currentId, onChange}:{users:Account[];currentId:string;onChange:(users:Account[])=>void}) {
   const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [role,setRole]=useState<AccessRole>("Editor"); const [error,setError]=useState("");
   async function add(e:React.FormEvent) { e.preventDefault(); setError(""); if(password.length<8){setError("A senha deve ter pelo menos 8 caracteres.");return} if(users.some(u=>u.email===email.trim().toLowerCase())){setError("Este e-mail já está cadastrado.");return} try {onChange([...users,await makeAccount(name,email,password,role)]);setName("");setEmail("");setPassword("")} catch {setError("Não foi possível salvar o usuário.")} }
-  function changeRole(user:Account, next:AccessRole){if(user.id===currentId && next!=="Administrador")return;onChange(users.map(u=>u.id===user.id?{...u,role:next}:u))}
-  function remove(user:Account){if(user.id===currentId)return;onChange(users.filter(u=>u.id!==user.id))}
-  return <><PageHead title="Administração de usuários" desc="Cadastre usuários e defina os níveis de acesso ao portal."/><Card><form className="account-form" onSubmit={add}><label>Nome<input required value={name} onChange={e=>setName(e.target.value)} /></label><label>E-mail<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} /></label><label>Senha inicial<input required type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} /></label><label>Perfil<select value={role} onChange={e=>setRole(e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></label><button className="primary" type="submit"><I.UserPlus/> Criar usuário</button></form>{error&&<p className="auth-error" role="alert">{error}</p>}</Card><Card><div className="tablewrap"><table><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Permissões</th><th></th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td><span className="person">{user.name[0]}</span><b>{user.name}</b></td><td>{user.email}</td><td><select className="quarter-inline" value={user.role} disabled={user.id===currentId} onChange={e=>changeRole(user,e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></td><td>{user.role==="Administrador"?"Acesso total":user.role==="Editor"?"Demandas, produtos, capacidade e roadmap":"Somente demandas e roadmap"}</td><td>{user.id!==currentId&&<button className="ghost" onClick={()=>remove(user)} aria-label={`Excluir ${user.name}`}><I.Trash2/></button>}</td></tr>)}</tbody></table></div></Card></>;
+  function changeRole(user:Account, next:AccessRole){if(user.email===ADMIN_EMAIL || user.id===currentId && next!=="Administrador")return;onChange(users.map(u=>u.id===user.id?{...u,role:next}:u))}
+  function remove(user:Account){if(user.id===currentId || user.email===ADMIN_EMAIL)return;onChange(users.filter(u=>u.id!==user.id))}
+  return <><PageHead title="Administração de usuários" desc="Cadastre usuários e defina os níveis de acesso ao portal."/><Card><form className="account-form" onSubmit={add}><label>Nome<input required value={name} onChange={e=>setName(e.target.value)} /></label><label>E-mail<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} /></label><label>Senha inicial<input required type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} /></label><label>Perfil<select value={role} onChange={e=>setRole(e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></label><button className="primary" type="submit"><I.UserPlus/> Criar usuário</button></form>{error&&<p className="auth-error" role="alert">{error}</p>}</Card><Card><div className="tablewrap"><table><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Permissões</th><th></th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td><span className="person">{user.name[0]}</span><b>{user.name}</b></td><td>{user.email}</td><td><select className="quarter-inline" value={user.role} disabled={user.id===currentId || user.email===ADMIN_EMAIL} onChange={e=>changeRole(user,e.target.value as AccessRole)}><option>Administrador</option><option>Editor</option><option>Visualização</option></select></td><td>{user.role==="Administrador"?"Acesso total":user.role==="Editor"?"Demandas, produtos, capacidade e roadmap":"Somente demandas e roadmap"}</td><td>{user.id!==currentId && user.email!==ADMIN_EMAIL && <button className="ghost" onClick={()=>remove(user)} aria-label={`Excluir ${user.name}`}><I.Trash2/></button>}</td></tr>)}</tbody></table></div></Card></>;
 }
 
 function Login({hasAccounts,onLogin}:{hasAccounts:boolean;onLogin:(account:Account,accounts?:Account[])=>void}) {

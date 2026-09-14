@@ -3,12 +3,30 @@ export type Account = { id: string; name: string; email: string; role: AccessRol
 
 const USERS_KEY = "roadmap.accounts.v1";
 const SESSION_KEY = "roadmap.session.v1";
+const ADMIN_SEED_KEY = "roadmap.admin-seed.v1";
+export const ADMIN_EMAIL = "vagnersmoraes@hotmail.com";
+const initialAdmin: Account = {
+  id: "default-admin",
+  name: "Vagner Moraes",
+  email: ADMIN_EMAIL,
+  role: "Administrador",
+  salt: "f56bc8c844fdcadab43c9110c3db29f0",
+  passwordHash: "6d4bc138c662228218ad86afe47dbba5a1da0387c6242f35b68e1e16f425bdc6",
+};
 
 export function loadAccounts(): Account[] {
   try {
     const value = JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
-    return Array.isArray(value) ? value : [];
-  } catch { return []; }
+    const accounts: Account[] = Array.isArray(value) ? value : [];
+    if (localStorage.getItem(ADMIN_SEED_KEY)) return accounts;
+    const existing = accounts.find(account => account.email?.toLowerCase() === ADMIN_EMAIL);
+    const next = existing
+      ? accounts.map(account => account.id === existing.id ? { ...account, email: ADMIN_EMAIL, role: "Administrador" as const, salt: initialAdmin.salt, passwordHash: initialAdmin.passwordHash } : account)
+      : [initialAdmin, ...accounts];
+    localStorage.setItem(USERS_KEY, JSON.stringify(next));
+    localStorage.setItem(ADMIN_SEED_KEY, "1");
+    return next;
+  } catch { return [initialAdmin]; }
 }
 
 export function saveAccounts(accounts: Account[]) {
