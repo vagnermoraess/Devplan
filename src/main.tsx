@@ -65,6 +65,7 @@ type Page =
   | "Planejamento"
   | "Auditoria"
   | "Relatórios"
+  | "Analytics"
   | "Configurações"
   | "Usuários";
 type Demand = {
@@ -267,6 +268,7 @@ const nav: [Page, any][] = [
   ["Planejamento", I.CalendarRange],
   ["Auditoria", I.ClipboardCheck],
   ["Relatórios", I.BarChart3],
+  ["Analytics", I.ChartNoAxesCombined],
   ["Configurações", I.Settings],
   ["Usuários", I.UserCog],
 ];
@@ -2720,6 +2722,50 @@ function Changes(){
   return <><PageHead title="Auditoria do Roadmap" desc="Histórico automático de versões, inclusões, movimentações, remoções e alocações."/><div className="changes-filters"><div><I.Filter/><span><b>Filtrar auditoria</b><small>{filtered.length} de {history.length} alterações</small></span></div><label>Produto<select value={product} onChange={(e)=>setProduct(e.target.value)}><option>Todos</option>{products.map((item)=><option key={item.id} value={item.name}>{item.name}</option>)}</select></label><label>Quarter<select value={quarter} onChange={(e)=>setQuarter(e.target.value)}><option value="Todos">Quarter</option>{quarters.map((item)=><option key={item}>{item}</option>)}</select></label>{(product!=="Todos"||quarter!=="Todos")&&<button onClick={()=>{setProduct("Todos");setQuarter("Todos")}}><I.X/> Limpar</button>}</div><Card>{filtered.length===0?<div className="changes-empty"><I.History/><b>Nenhuma alteração encontrada</b><span>{history.length?"Altere ou limpe os filtros para visualizar outros registros.":"As ações realizadas no Roadmap aparecerão automaticamente aqui."}</span></div>:filtered.map((item)=>{const storedVersion=versionFromLog(item);return <div className="change" key={item.id}><div className={`changeicon log-${item.tone}`}>{item.tone==="good"?<I.Plus/>:item.tone==="bad"?<I.Trash2/>:item.tone==="warn"?<I.ArrowRightLeft/>:<I.Users/>}</div><div><small>{item.date}</small>{storedVersion?<button className="audit-version-button" onClick={()=>setSelectedVersion(storedVersion)}>{item.title}<I.ExternalLink/></button>:<b>{item.title}</b>}<span>por {item.actor}{item.product?` · ${item.product}`:""}{item.quarter?` · ${item.quarter}`:""}</span>{(item.demandId||item.demandName)&&<span className="change-demand"><I.ListTodo/> Demanda: <b>{item.demandName||rows.find((d)=>d.id===item.demandId)?.name||item.demandId}</b>{item.demandId&&` (${item.demandId})`}</span>}</div><Badge tone={item.tone}>{item.detail}</Badge></div>})}</Card>
   {selectedVersion&&<div className="overlay confirm-overlay" onMouseDown={()=>setSelectedVersion(null)}><div className="version-detail-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-head"><div><span className="modal-icon"><I.History/></span><div><h2>Roadmap V{selectedVersion.version}</h2><p>{selectedVersion.quarter} · armazenada em {selectedVersion.createdAt}</p></div></div><button className="modal-close" onClick={()=>setSelectedVersion(null)}><I.X/></button></div><div className="version-demand-list">{selectedVersion.entries.length===0?<div className="picker-empty"><I.CalendarX/><b>Versão sem demandas</b></div>:selectedVersion.entries.map((entry)=>{const demand=selectedVersion.demands.find((item)=>item.id===entry.demandId);return <div key={entry.demandId}><span className="demand-dot"/><div><b>{demand?.name||entry.demandId}</b><small>{entry.demandId} · {demand?.product||"Produto não disponível"} · {demand?.status||"Status não disponível"}</small></div><Badge tone="blue">{entry.allocations.reduce((sum,item)=>sum+item.hours,0)}h</Badge></div>})}</div><div className="allocation-total"><span>Total da versão</span><b>{selectedVersion.entries.length} demanda(s) · {selectedVersion.entries.reduce((sum,entry)=>sum+entry.allocations.reduce((hours,item)=>hours+item.hours,0),0)}h</b></div><div className="picker-foot"><button className="primary" onClick={()=>setSelectedVersion(null)}>Fechar</button></div></div></div>}</>;
 }
+function Analytics() {
+  const { rows, roadmap } = useDemands();
+  const { team } = useTeam();
+  const { products } = useProducts();
+  const [productFilter, setProductFilter] = useState("Todos");
+  const [quarterFilter, setQuarterFilter] = useState("Todos");
+  const completed = rows.filter(demand => ["Concluído", "Concluída"].includes(demand.status) || demand.progress === 100);
+  const quarterFor = (demand: Demand) => {
+    const planned = roadmap.find(entry => entry.demandId === demand.id)?.quarter;
+    if (planned) return planned;
+    const match = demand.dueDate?.match(/^(\d{4})-(\d{2})-\d{2}$/);
+    return match ? `Q${Math.ceil(Number(match[2]) / 3)} ${match[1]}` : "Sem quarter";
+  };
+  const productOptions = Array.from(new Set([...products.map(product => product.name), ...completed.map(demand => demand.product)]));
+  const quarterOptions = Array.from(new Set(completed.map(quarterFor))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const filtered = completed.filter(demand => (productFilter === "Todos" || demand.product === productFilter) && (quarterFilter === "Todos" || quarterFor(demand) === quarterFilter));
+  const allocatedByRole = (demand: Demand, roles: string[]) => {
+    const allocations = roadmap.find(entry => entry.demandId === demand.id)?.allocations || [];
+    const linkedIds = demand.resourceIds || [];
+    if (!allocations.length && !linkedIds.length) return null;
+    const explicitTotal = allocations.reduce((sum, item) => sum + item.hours, 0);
+    const implicitIds = linkedIds.filter(id => !allocations.some(item => item.staffId === id));
+    const implicitHours = implicitIds.length ? Math.round(Math.max(0, demand.effort - explicitTotal) / implicitIds.length) : 0;
+    return team.reduce((sum, person) => {
+      if (!roles.includes(person.role.trim().toUpperCase())) return sum;
+      return sum + (allocations.find(item => item.staffId === person.id)?.hours ?? (implicitIds.includes(person.id) ? implicitHours : 0));
+    }, 0);
+  };
+  return <>
+    <PageHead title="Analytics" desc="Demandas concluídas e capacidade alocada por função." />
+    <div className="analytics-filters">
+      <label>Produto<select value={productFilter} onChange={event => setProductFilter(event.target.value)}><option>Todos</option>{productOptions.map(name => <option key={name}>{name}</option>)}</select></label>
+      <label>Quarter<select value={quarterFilter} onChange={event => setQuarterFilter(event.target.value)}><option>Todos</option>{quarterOptions.map(value => <option key={value}>{value}</option>)}</select></label>
+      <span>{filtered.length} de {completed.length} demandas concluídas</span>
+    </div>
+    <Card><div className="tablewrap"><table className="analytics-table"><thead><tr><th>Demanda</th><th>Capacidade de Desenvolvimento</th><th>Capacidade de Testes</th><th>Prazo</th><th>Responsável</th></tr></thead><tbody>{filtered.map(demand => {
+      const development = allocatedByRole(demand, ["DEV", "BACKEND", "FRONTEND", "FULL STACK"]);
+      const tests = allocatedByRole(demand, ["QA", "QA ENGINEER"]);
+      const due = demand.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(demand.dueDate) ? new Date(`${demand.dueDate}T12:00:00`).toLocaleDateString("pt-BR") : demand.due || "Sem prazo";
+      return <tr key={demand.id}><td><b>{demand.name}</b><small>{demand.id} · {demand.product} · {quarterFor(demand)}</small></td><td>{development === null ? "—" : `${development}h`}</td><td>{tests === null ? "—" : `${tests}h`}</td><td>{due}</td><td>{demand.owner || "Não informado"}</td></tr>;
+    })}</tbody></table>{filtered.length === 0 && <div className="analytics-empty">Nenhuma demanda concluída encontrada para os filtros selecionados.</div>}</div></Card>
+  </>;
+}
+
 function Reports() {
   return (
     <>
@@ -2839,7 +2885,7 @@ function App() {
   function updateAccounts(next:Account[]){saveAccounts(next);setAccounts(next)}
   function login(account:Account,next?:Account[]){if(next)updateAccounts(next);setSession(account.id);setActiveId(account.id)}
   function logout(){setSession(null);setActiveId(null);setCmd(false)}
-  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade"].includes(name):["Demandas","Roadmap","Comparação"].includes(name));
+  const allowedNav=nav.filter(([name])=>role==="Administrador"?true:role==="Editor"?["Visão geral","Demandas","Roadmap","Comparação","Produtos","Capacidade","Analytics"].includes(name):["Demandas","Roadmap","Comparação","Analytics"].includes(name));
   useEffect(()=>{if(!allowedNav.some(([name])=>name===page))setPage(role==="Visualização"?"Demandas":"Visão geral")},[role]);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
@@ -2936,6 +2982,8 @@ function App() {
             <Changes />
           ) : page === "Relatórios" ? (
             <Reports />
+          ) : page === "Analytics" ? (
+            <Analytics />
           ) : page === "Usuários" ? (
             <UsersAdmin users={accounts} currentId={activeUser.id} onChange={updateAccounts}/>
           ) : (
