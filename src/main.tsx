@@ -77,6 +77,8 @@ type Demand = {
   priority: string;
   effort: number;
   actualEffort?: number;
+  billable?: boolean;
+  billedAmount?: number;
   progress: number;
   due: string;
   risk: string;
@@ -1177,6 +1179,8 @@ const emptyDemandForm = {
   startDate: "",
   effort: "40",
   actualEffort: "",
+  billable: "false",
+  billedAmount: "",
   owner: "",
   dependencies: "",
   justification: "",
@@ -1226,6 +1230,10 @@ function Demands() {
       setForm({ ...form, product: e.target.value, resourceIds: [] });
       return;
     }
+    if (e.target.name === "billable") {
+      setForm({ ...form, billable: e.target.value, billedAmount: e.target.value === "true" ? form.billedAmount : "" });
+      return;
+    }
     if (e.target.name === "status" && e.target.value === "Concluído") {
       setForm({ ...form, status: "Concluído", progress: "100" });
       return;
@@ -1273,6 +1281,8 @@ function Demands() {
       description: d.notes || "",
       effort: String(d.effort),
       actualEffort: d.actualEffort === undefined ? "" : String(d.actualEffort),
+      billable: String(d.billable ?? false),
+      billedAmount: d.billedAmount === undefined ? "" : String(d.billedAmount),
       owner: d.owner,
       requester: d.owner,
       startDate: d.startDate || "",
@@ -1290,6 +1300,8 @@ function Demands() {
     if (!form.due) next.due = "Informe o prazo desejado.";
     if (Number(form.effort) <= 0) next.effort = "Informe um esforço válido.";
     if (form.actualEffort !== "" && (!Number.isFinite(Number(form.actualEffort)) || Number(form.actualEffort) < 0)) next.actualEffort = "Informe um esforço realizado válido.";
+    const billedAmount = Number(form.billedAmount);
+    if (form.billable === "true" && (!Number.isFinite(billedAmount) || billedAmount < 0 || Math.abs(billedAmount * 100 - Math.round(billedAmount * 100)) > 0.000001)) next.billedAmount = "Informe um valor não negativo com até duas casas decimais.";
     setErrors(next);
     if (Object.keys(next).length) return;
     const date = new Date(form.due + "T12:00:00");
@@ -1305,6 +1317,8 @@ function Demands() {
       priority: form.priority,
       effort: Number(form.effort),
       actualEffort: form.actualEffort === "" ? undefined : Number(form.actualEffort),
+      billable: form.billable === "true",
+      billedAmount: form.billable === "true" ? Math.round(billedAmount * 100) / 100 : 0,
       progress: Math.min(100, Math.max(0, Number(form.progress) || 0)),
       due,
       dueDate: form.due,
@@ -1464,7 +1478,7 @@ function Demands() {
                   <I.ListPlus />
                 </span>
                 <div>
-                  <h2>Nova demanda</h2>
+                  <h2>{editing ? "Editar demanda" : "Nova demanda"}</h2>
                   <p>
                     Cadastre a demanda para avaliar seu impacto no planejamento.
                   </p>
@@ -1623,6 +1637,19 @@ function Demands() {
                 )}
               </div>
               <div className="form-field"><label htmlFor="actualEffort">Esforço realizado (horas)</label><input id="actualEffort" type="number" min="0" step="0.5" name="actualEffort" value={form.actualEffort} onChange={change} placeholder="Ainda não informado" className={errors.actualEffort ? "invalid" : ""}/>{errors.actualEffort && <small className="field-error">{errors.actualEffort}</small>}</div>
+              <div className="form-field wide">
+                <label htmlFor="billable">Faturamento</label>
+                <select id="billable" name="billable" value={form.billable} onChange={change}>
+                  <option value="false">Não faturável</option>
+                  <option value="true">Faturável</option>
+                </select>
+              </div>
+              <div className="form-field wide">
+                <label htmlFor="billedAmount">Valor faturado (R$)</label>
+                <input id="billedAmount" name="billedAmount" type="number" min="0" step="0.01" value={form.billedAmount} onChange={change} disabled={form.billable !== "true"} placeholder="0,00" className={errors.billedAmount ? "invalid" : ""}/>
+                <small className="resource-help">Um valor maior que zero identifica a demanda como faturada. Deixe vazio ou zero enquanto não houver faturamento.</small>
+                {errors.billedAmount && <small className="field-error" role="alert">{errors.billedAmount}</small>}
+              </div>
               <div className="form-field wide">
                 <label>Dependências</label>
                 <input
@@ -2797,6 +2824,8 @@ function Analytics() {
   const { products } = useProducts();
   const [productFilter, setProductFilter] = useState("Todos");
   const [quarterFilter, setQuarterFilter] = useState("Todos");
+  const [billingFilter, setBillingFilter] = useState("Todos");
+  const isBilled = (demand: Demand) => (demand.billedAmount ?? 0) > 0;
   const completed = rows.filter(demand => ["Concluído", "Concluída"].includes(demand.status) || demand.progress === 100);
   const quarterFor = (demand: Demand) => {
     const planned = roadmap.find(entry => entry.demandId === demand.id)?.quarter;
@@ -2806,7 +2835,7 @@ function Analytics() {
   };
   const productOptions = Array.from(new Set([...products.map(product => product.name), ...completed.map(demand => demand.product)]));
   const quarterOptions = Array.from(new Set(completed.map(quarterFor))).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  const filtered = completed.filter(demand => (productFilter === "Todos" || demand.product === productFilter) && (quarterFilter === "Todos" || quarterFor(demand) === quarterFilter));
+  const filtered = completed.filter(demand => (productFilter === "Todos" || demand.product === productFilter) && (quarterFilter === "Todos" || quarterFor(demand) === quarterFilter) && (billingFilter === "Todos" || isBilled(demand) === (billingFilter === "Faturadas")));
   const allocatedByRole = (demand: Demand, roles: string[]) => {
     const allocations = roadmap.find(entry => entry.demandId === demand.id)?.allocations || [];
     const linkedIds = demand.resourceIds || [];
@@ -2824,13 +2853,14 @@ function Analytics() {
     <div className="analytics-filters">
       <label>Produto<select value={productFilter} onChange={event => setProductFilter(event.target.value)}><option>Todos</option>{productOptions.map(name => <option key={name}>{name}</option>)}</select></label>
       <label>Quarter<select value={quarterFilter} onChange={event => setQuarterFilter(event.target.value)}><option>Todos</option>{quarterOptions.map(value => <option key={value}>{value}</option>)}</select></label>
+      <label>Faturamento<select value={billingFilter} onChange={event => setBillingFilter(event.target.value)}><option>Todos</option><option>Faturadas</option><option>Não faturadas</option></select></label>
       <span>{filtered.length} de {completed.length} demandas concluídas</span>
     </div>
-    <Card><div className="tablewrap"><table className="analytics-table"><thead><tr><th>Demanda</th><th>Capacidade de Desenvolvimento</th><th>Capacidade de Testes</th><th>Prazo</th><th>Responsável</th></tr></thead><tbody>{filtered.map(demand => {
+    <Card><div className="tablewrap"><table className="analytics-table"><thead><tr><th>Demanda</th><th>Capacidade de Desenvolvimento</th><th>Capacidade de Testes</th><th>Prazo</th><th>Responsável</th><th>Faturada</th><th>Valor faturado</th></tr></thead><tbody>{filtered.map(demand => {
       const development = allocatedByRole(demand, ["DEV", "BACKEND", "FRONTEND", "FULL STACK"]);
       const tests = allocatedByRole(demand, ["QA", "QA ENGINEER"]);
       const due = demand.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(demand.dueDate) ? new Date(`${demand.dueDate}T12:00:00`).toLocaleDateString("pt-BR") : demand.due || "Sem prazo";
-      return <tr key={demand.id}><td><b>{demand.name}</b><small>{demand.id} · {demand.product} · {quarterFor(demand)}</small></td><td>{development === null ? "—" : `${development}h`}</td><td>{tests === null ? "—" : `${tests}h`}</td><td>{due}</td><td>{demand.owner || "Não informado"}</td></tr>;
+      return <tr key={demand.id}><td><b>{demand.name}</b><small>{demand.id} · {demand.product} · {quarterFor(demand)}</small></td><td>{development === null ? "—" : `${development}h`}</td><td>{tests === null ? "—" : `${tests}h`}</td><td>{due}</td><td>{demand.owner || "Não informado"}</td><td><Badge tone={isBilled(demand) ? "good" : "neutral"}>{isBilled(demand) ? "Sim" : "Não"}</Badge></td><td>{(demand.billedAmount ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td></tr>;
     })}</tbody></table>{filtered.length === 0 && <div className="analytics-empty">Nenhuma demanda concluída encontrada para os filtros selecionados.</div>}</div></Card>
   </>;
 }
