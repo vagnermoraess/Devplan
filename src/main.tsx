@@ -2550,95 +2550,52 @@ function Capacity() {
 }
 
 function Planning() {
-  const [hours, setHours] = useState(60);
-  const occupancy = Math.round(((852 + hours) / 1040) * 100);
-  return (
-    <>
-      <PageHead
-        title="Simulação de cenários"
-        desc="Teste decisões antes de comprometer o planejamento real."
-      />
-      <div className="scenario">
-        <Card>
-          <div className="cardhead">
-            <div>
-              <h3>Configurar mudança</h3>
-              <p>Adicione uma demanda hipotética</p>
-            </div>
-          </div>
-          <label>
-            Título
-            <input defaultValue="Nova demanda estratégica" />
-          </label>
-          <div className="form2">
-            <label>
-              Tipo
-              <select>
-                <option>Estratégica</option>
-                <option>Emergencial</option>
-              </select>
-            </label>
-            <label>
-              Prioridade
-              <select>
-                <option>Alta</option>
-                <option>Crítica</option>
-              </select>
-            </label>
-          </div>
-          <label>
-            Esforço estimado <b>{hours}h</b>
-            <input
-              type="range"
-              min="10"
-              max="180"
-              value={hours}
-              onChange={(e) => setHours(+e.target.value)}
-            />
-          </label>
-          <button className="primary full">
-            <I.Play /> Recalcular cenário
-          </button>
-        </Card>
-        <Card className="impact">
-          <div className="cardhead">
-            <div>
-              <h3>Impacto projetado</h3>
-              <p>Comparação com o cenário atual</p>
-            </div>
-            <Badge tone={occupancy > 90 ? "bad" : "warn"}>
-              {occupancy > 90 ? "Alto impacto" : "Atenção"}
-            </Badge>
-          </div>
-          <div className="compare">
-            <div>
-              <span>CENÁRIO ATUAL</span>
-              <strong>82%</strong>
-              <small>852h comprometidas</small>
-            </div>
-            <I.ArrowRight />
-            <div>
-              <span>CENÁRIO SIMULADO</span>
-              <strong className={occupancy > 90 ? "bad" : ""}>
-                {occupancy}%
-              </strong>
-              <small>{852 + hours}h comprometidas</small>
-            </div>
-          </div>
-          <div className="alert bad">
-            <I.TriangleAlert />
-            <div>
-              <b>Capacidade próxima do limite</b>
-              <p>Não há entregas do roadmap vinculadas às novas demandas.</p>
-            </div>
-          </div>
-          <button className="primary full">Aplicar ao planejamento</button>
-        </Card>
-      </div>
-    </>
+  const { rows, roadmap } = useDemands();
+  const { products } = useProducts();
+  const [productFilter, setProductFilter] = useState("Todos");
+  const [quarterFilter, setQuarterFilter] = useState("Todos");
+  const [statusFilter, setStatusFilter] = useState("Todos");
+  const quarterByDemand = new Map(roadmap.map(entry => [entry.demandId, entry.quarter]));
+  const quarterFor = (demand: Demand) => quarterByDemand.get(demand.id) || "Sem quarter";
+  const productOptions = Array.from(new Set([...products.map(product => product.name), ...rows.map(demand => demand.product)])).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const quarterOptions = Array.from(new Set([...quarters, ...roadmap.map(entry => entry.quarter)])).sort((a, b) => a.slice(3).localeCompare(b.slice(3)) || a.localeCompare(b));
+  const statusOptions = Array.from(new Set(rows.map(demand => demand.status))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const filtered = rows.filter(demand =>
+    (productFilter === "Todos" || demand.product === productFilter) &&
+    (quarterFilter === "Todos" || quarterFor(demand) === quarterFilter) &&
+    (statusFilter === "Todos" || demand.status === statusFilter)
   );
+  const hasFilters = productFilter !== "Todos" || quarterFilter !== "Todos" || statusFilter !== "Todos";
+  return <>
+    <PageHead title="Planejamento" desc="Acompanhe as demandas por produto, quarter e status." />
+    <div className="planning-filters">
+      <label>Produto<select value={productFilter} onChange={event => setProductFilter(event.target.value)}><option value="Todos">Todos os produtos</option>{productOptions.map(product => <option key={product}>{product}</option>)}</select></label>
+      <label>Quarter<select value={quarterFilter} onChange={event => setQuarterFilter(event.target.value)}><option value="Todos">Todos os quarters</option><option>Sem quarter</option>{quarterOptions.map(quarter => <option key={quarter}>{quarter}</option>)}</select></label>
+      <label>Status<select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="Todos">Todos os status</option>{statusOptions.map(status => <option key={status}>{status}</option>)}</select></label>
+      {hasFilters && <button className="ghost" onClick={() => { setProductFilter("Todos"); setQuarterFilter("Todos"); setStatusFilter("Todos"); }}><I.X /> Limpar filtros</button>}
+      <span role="status">{filtered.length} de {rows.length} demandas</span>
+    </div>
+    {filtered.length ? <div className="planning-cards">
+      {filtered.map(demand => {
+        const progress = Math.min(100, Math.max(0, demand.progress || 0));
+        const completed = ["Concluído", "Concluída"].includes(demand.status) || progress === 100;
+        const due = demand.dueDate ? new Date(`${demand.dueDate}T12:00:00`).toLocaleDateString("pt-BR") : demand.due || "Sem prazo";
+        return <article className="planning-demand-card" key={demand.id}>
+          <div className="planning-card-top"><span>{demand.id}</span><Badge tone={completed ? "good" : demand.status === "Bloqueada" ? "bad" : "blue"}>{demand.status}</Badge></div>
+          <h3>{demand.name}</h3>
+          <div className="planning-card-tags"><span><I.Boxes aria-hidden="true" />{demand.product}</span><span><I.CalendarRange aria-hidden="true" />{quarterFor(demand)}</span></div>
+          <dl>
+            <div><dt>Responsável</dt><dd>{demand.owner || "Não informado"}</dd></div>
+            <div><dt>Prioridade</dt><dd>{demand.priority}</dd></div>
+            <div><dt>Prazo</dt><dd>{due}</dd></div>
+            <div><dt>Esforço estimado</dt><dd>{demand.effort}h</dd></div>
+          </dl>
+          <div className="planning-card-progress"><span>Evolução <b>{progress}%</b></span><progress max="100" value={progress} aria-label={`Evolução de ${demand.name}`} /></div>
+        </article>;
+      })}
+    </div> : <Card><div className="planning-empty"><I.ListTodo aria-hidden="true" /><b>{rows.length ? "Nenhuma demanda encontrada" : "Nenhuma demanda cadastrada"}</b><p>{rows.length ? "Altere ou limpe os filtros para visualizar outras demandas." : "Cadastre demandas na Gestão de demandas para acompanhar o planejamento."}</p></div></Card>}
+  </>;
 }
-
 function Risks() {
   return (
     <>
