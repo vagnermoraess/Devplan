@@ -4,15 +4,15 @@ export type Account = { id: string; name: string; email: string; role: AccessRol
 const USERS_KEY = "roadmap.accounts.v1";
 const SESSION_KEY = "roadmap.session.v1";
 const REMEMBERED_SESSION_KEY = "roadmap.remembered-session.v1";
-const ADMIN_SEED_KEY = "roadmap.admin-seed.v1";
+const ADMIN_SEED_KEY = "roadmap.admin-seed.v2";
 export const ADMIN_EMAIL = "vagnersmoraes@hotmail.com";
 const initialAdmin: Account = {
   id: "default-admin",
   name: "Vagner Moraes",
   email: ADMIN_EMAIL,
   role: "Administrador",
-  salt: "f56bc8c844fdcadab43c9110c3db29f0",
-  passwordHash: "6d4bc138c662228218ad86afe47dbba5a1da0387c6242f35b68e1e16f425bdc6",
+  salt: "a3944760432e33f20b1a4c56dfef0c4a",
+  passwordHash: "83636cee3741395aac6d7c470715390b5cf299bdb96b36bb2165984715142a86",
 };
 
 export function loadAccounts(): Account[] {
