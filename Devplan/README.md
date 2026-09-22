@@ -8,7 +8,8 @@ MVP navegável de um portal corporativo para planejamento trimestral, gestão de
 npm install
 npm run dev
 ```
-
+  
+  
 
 
 Para gerar a versão de produção:
